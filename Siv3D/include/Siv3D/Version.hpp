@@ -2,27 +2,35 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include "Types.hpp"
 
-/// <summary>
-/// ライブラリのバージョン表示
-/// Version text
-/// </summary>
-# define SIV3D_VERSION	U"0.4.1"
+/// @brief ライブラリのメジャーバージョン | Library major version
+# define SIV3D_VERSION_MAJOR			0
 
-namespace s3d
-{
-	/// <summary>
-	/// バージョン ID
-	/// Version value
-	/// </summary>
-	inline constexpr uint32 Siv3DVersion = 200'004'012u;
-}
+/// @brief ライブラリのマイナーバージョン | Library minor version
+# define SIV3D_VERSION_MINOR			6
+
+/// @brief ライブラリのリビジョンバージョン | Library revision version
+# define SIV3D_VERSION_REVISION			4
+
+/// @brief プレリリースタグ | Pre-release tag
+# define SIV3D_VERSION_PRERELEASE_TAG	U""
+
+/// @brief ライブラリのバージョン | Library version
+# define SIV3D_VERSION			((SIV3D_VERSION_MAJOR * 100 * 100) + (SIV3D_VERSION_MINOR * 100) + (SIV3D_VERSION_REVISION))
+
+/// @brief ライブラリのバージョンの文字列（簡易版） | Short Library version
+# define SIV3D_VERSION_SHORT_STRING	U"0.6.4"
+
+/// @brief ライブラリのバージョンの文字列 | Library version
+# define SIV3D_VERSION_STRING	U"0.6.4" SIV3D_VERSION_PRERELEASE_TAG
+
+/// @brief ライブラリのバージョン名 | Library version name
+# define SIV3D_VERSION_NAME		U"Siv3D May 2022"

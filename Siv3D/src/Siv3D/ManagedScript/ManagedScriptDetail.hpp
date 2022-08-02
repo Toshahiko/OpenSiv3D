@@ -2,24 +2,51 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include <Siv3D/Script.hpp>
 # include <Siv3D/ManagedScript.hpp>
+# include <Siv3D/Script.hpp>
 
 namespace s3d
 {
 	class ManagedScript::ManagedScriptDetail
 	{
+	public:
+
+		ManagedScriptDetail();
+
+		explicit ManagedScriptDetail(FilePathView path);
+
+		~ManagedScriptDetail();
+
+		[[nodiscard]]
+		bool isEmpty() const;
+
+		[[nodiscard]]
+		bool compiled() const;
+
+		void setTriggerToReload(const std::function<bool()>& trigger);
+
+		const Array<FilePath>& getIncludedFiles() const noexcept;
+
+		void run();
+
+		[[nodiscard]]
+		bool hasException() const;
+
+		void clearException();
+
 	private:
 
 		Script m_script;
+
+		std::function<bool()> m_triggerToReload;
 
 		std::function<bool()> m_callback;
 
@@ -28,23 +55,5 @@ namespace s3d
 		bool m_requestReload = false;
 
 		bool m_hasException = false;
-
-	public:
-
-		ManagedScriptDetail();
-
-		explicit ManagedScriptDetail(const FilePath& path);
-
-		~ManagedScriptDetail();
-
-		[[nodiscard]] bool isEmpty() const;
-
-		[[nodiscard]] bool compiled() const;
-
-		void run();
-
-		[[nodiscard]] bool hasException() const;
-
-		void clearException();
 	};
 }

@@ -1,73 +1,86 @@
-﻿
-# include <Siv3D.hpp> // OpenSiv3D v0.4.1
+﻿# include <Siv3D.hpp> // OpenSiv3D v0.6.4
 
 void Main()
 {
-	// 背景を水色にする
-	Scene::SetBackground(ColorF(0.8, 0.9, 1.0));
+	// 背景の色を設定 | Set background color
+	Scene::SetBackground(ColorF{ 0.8, 0.9, 1.0 });
 
-	// 大きさ 60 のフォントを用意
-	const Font font(60);
+	// 通常のフォントを作成 | Create a new font
+	const Font font{ 60 };
 
-	// 猫のテクスチャを用意
-	const Texture cat(Emoji(U"🐈"));
+	// 絵文字用フォントを作成 | Create a new emoji font
+	const Font emojiFont{ 60, Typeface::ColorEmoji };
 
-	// 猫の座標
-	Vec2 catPos(640, 450);
+	// `font` が絵文字用フォントも使えるようにする | Set emojiFont as a fallback
+	font.addFallback(emojiFont);
+
+	// 画像ファイルからテクスチャを作成 | Create a texture from an image file
+	const Texture texture{ U"example/windmill.png" };
+
+	// 絵文字からテクスチャを作成 | Create a texture from an emoji
+	const Texture emoji{ U"🐈"_emoji };
+
+	// 絵文字を描画する座標 | Coordinates of the emoji
+	Vec2 emojiPos{ 300, 150 };
+
+	// テキストを画面にデバッグ出力 | Print a text
+	Print << U"Push [A] key";
 
 	while (System::Update())
 	{
-		// テキストを画面の中心に描く
-		font(U"Hello, Siv3D!🐣").drawAt(Scene::Center(), Palette::Black);
+		// テクスチャを描く | Draw a texture
+		texture.draw(200, 200);
 
-		// 大きさをアニメーションさせて猫を表示する
-		cat.resized(100 + Periodic::Sine0_1(1s) * 20).drawAt(catPos);
+		// テキストを画面の中心に描く | Put a text in the middle of the screen
+		font(U"Hello, Siv3D!🚀").drawAt(Scene::Center(), Palette::Black);
 
-		// マウスカーソルに追従する半透明の赤い円を描く
-		Circle(Cursor::Pos(), 40).draw(ColorF(1, 0, 0, 0.5));
+		// サイズをアニメーションさせて絵文字を描く | Draw a texture with animated size
+		emoji.resized(100 + Periodic::Sine0_1(1s) * 20).drawAt(emojiPos);
 
-		// [A] キーが押されたら
+		// マウスカーソルに追随する半透明な円を描く | Draw a red transparent circle that follows the mouse cursor
+		Circle{ Cursor::Pos(), 40 }.draw(ColorF{ 1, 0, 0, 0.5 });
+
+		// もし [A] キーが押されたら | When [A] key is down
 		if (KeyA.down())
 		{
-			// Hello とデバッグ表示する
-			Print << U"Hello!";
+			// 選択肢からランダムに選ばれたメッセージをデバッグ表示 | Print a randomly selected text
+			Print << Sample({ U"Hello!", U"こんにちは", U"你好", U"안녕하세요?" });
 		}
 
-		// ボタンが押されたら
-		if (SimpleGUI::Button(U"Move the cat", Vec2(600, 20)))
+		// もし [Button] が押されたら | When [Button] is pushed
+		if (SimpleGUI::Button(U"Button", Vec2{ 640, 40 }))
 		{
-			// 猫の座標を画面内のランダムな位置に移動する
-			catPos = RandomVec2(Scene::Rect());
+			// 画面内のランダムな場所に座標を移動
+			// Move the coordinates to a random position in the screen
+			emojiPos = RandomVec2(Scene::Rect());
 		}
 	}
 }
 
 //
-// = アドバイス =
-// Debug ビルドではプログラムの最適化がオフになります。
-// 実行速度が遅いと感じた場合は Release ビルドを試しましょう。
-// アプリをリリースするときにも、Release ビルドにするのを忘れないように！
+// - Debug ビルド: プログラムの最適化を減らす代わりに、エラーやクラッシュ時に詳細な情報を得られます。
 //
-// 思ったように動作しない場合は「デバッグの開始」でプログラムを実行すると、
-// 出力ウィンドウに詳細なログが表示されるので、エラーの原因を見つけやすくなります。
+// - Release ビルド: 最大限の最適化でビルドします。
 //
-// = お役立ちリンク =
+// - [デバッグ] メニュー → [デバッグの開始] でプログラムを実行すると、[出力] ウィンドウに詳細なログが表示され、エラーの原因を探せます。
 //
-// OpenSiv3D リファレンス
-// https://siv3d.github.io/ja-jp/
+// - Visual Studio を更新した直後は、プログラムのリビルド（[ビルド]メニュー → [ソリューションのリビルド]）が必要です。
 //
-// チュートリアル
-// https://siv3d.github.io/ja-jp/tutorial/basic/
+// Siv3D リファレンス
+// https://zenn.dev/reputeless/books/siv3d-documentation
 //
-// よくある間違い
-// https://siv3d.github.io/ja-jp/articles/mistakes/
+// Siv3D Reference
+// https://zenn.dev/reputeless/books/siv3d-documentation-en
 //
-// サポートについて
-// https://siv3d.github.io/ja-jp/support/support/
+// Siv3D コミュニティへの参加（Slack や Twitter, BBS で気軽に質問や情報交換ができます）
+// https://zenn.dev/reputeless/books/siv3d-documentation/viewer/community
 //
-// Siv3D Slack (ユーザコミュニティ) への参加
-// https://siv3d.github.io/ja-jp/community/community/
+// Siv3D User Community
+// https://zenn.dev/reputeless/books/siv3d-documentation-en/viewer/community
 //
-// 新機能の提案やバグの報告
+// 新機能の提案やバグの報告 | Feedback
 // https://github.com/Siv3D/OpenSiv3D/issues
+//
+// Sponsoring Siv3D
+// https://github.com/sponsors/Reputeless
 //

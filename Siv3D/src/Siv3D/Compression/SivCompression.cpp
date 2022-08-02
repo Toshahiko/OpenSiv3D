@@ -2,50 +2,86 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
-# include <zstd/zstd.h>
 # include <Siv3D/Compression.hpp>
 # include <Siv3D/BinaryReader.hpp>
 # include <Siv3D/BinaryWriter.hpp>
-# include <Siv3D/ReaderView.hpp>
+# include <ThirdParty/zstd/zstd.h>
+
+# include <Siv3D/EngineLog.hpp>
 
 namespace s3d
 {
 	namespace Compression
 	{
-		ByteArray Compress(const ByteArrayViewAdapter view, const int32 compressionLevel)
+		Blob Compress(const void* data, const size_t size, const int32 compressionLevel)
 		{
-			const size_t bufferSize = ZSTD_compressBound(view.size());
+			Blob blob;
 
-			Array<Byte> buffer(bufferSize);
+			if (not Compress(data, size, blob, compressionLevel))
+			{
+				return{};
+			}
 
-			const size_t result = ZSTD_compress(buffer.data(), buffer.size(), view.data(), view.size(), compressionLevel);
+			return blob;
+		}
+
+		bool Compress(const void* data, const size_t size, Blob& dst, const int32 compressionLevel)
+		{
+			const size_t bufferSize = ZSTD_compressBound(size);
+
+			dst.resize(bufferSize);
+
+			const size_t result = ZSTD_compress(dst.data(), dst.size(), data, size, compressionLevel);
 
 			if (ZSTD_isError(result))
 			{
-				return ByteArray();
+				dst.clear();
+				return false;
 			}
 
-			buffer.resize(result);
+			dst.resize(result);
 
-			buffer.shrink_to_fit();
-
-			return ByteArray(std::move(buffer));
+			return true;
 		}
 
-		ByteArray CompressFile(const FilePath& path, const int32 compressionLevel)
+		Blob Compress(const Blob& blob, const int32 compressionLevel)
 		{
-			BinaryReader reader(path);
+			return Compress(blob.data(), blob.size(), compressionLevel);
+		}
 
-			if (!reader)
+		bool Compress(const Blob& blob, Blob& dst, const int32 compressionLevel)
+		{
+			return Compress(blob.data(), blob.size(), dst, compressionLevel);
+		}
+
+		Blob CompressFile(const FilePathView path, const int32 compressionLevel)
+		{
+			Blob blob;
+
+			if (not CompressFile(path, blob, compressionLevel))
 			{
-				return ByteArray();
+				return{};
+			}
+
+			return blob;
+		}
+
+		bool CompressFile(const FilePathView path, Blob& dst, const int32 compressionLevel)
+		{
+			dst.clear();
+
+			BinaryReader reader{ path };
+
+			if (not reader)
+			{
+				return false;
 			}
 
 			const size_t inputBufferSize = ZSTD_CStreamInSize();
@@ -56,22 +92,19 @@ namespace s3d
 
 			ZSTD_CStream* const cStream = ZSTD_createCStream();
 
-			if (!cStream)
+			if (not cStream)
 			{
-				return ByteArray();
+				return false;
 			}
 
-			const size_t initResult = ZSTD_initCStream(cStream, compressionLevel);
-
-			if (ZSTD_isError(initResult))
+			if (const size_t ret = ZSTD_initCStream(cStream, compressionLevel); 
+				ZSTD_isError(ret))
 			{
 				ZSTD_freeCStream(cStream);
-				return ByteArray();
+				return false;
 			}
 
 			size_t toRead = inputBufferSize;
-
-			Array<Byte> buffer;
 
 			while (const size_t read = static_cast<size_t>(reader.read(pInputBuffer.get(), toRead)))
 			{
@@ -80,13 +113,13 @@ namespace s3d
 				while (input.pos < input.size)
 				{
 					ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
-					
+
 					toRead = ZSTD_compressStream(cStream, &output, &input);
-					
+
 					if (ZSTD_isError(toRead))
 					{
 						ZSTD_freeCStream(cStream);
-						return ByteArray();
+						return false;
 					}
 
 					if (toRead > inputBufferSize)
@@ -94,7 +127,7 @@ namespace s3d
 						toRead = inputBufferSize;
 					}
 
-					buffer.insert(buffer.end(), pOutputBuffer.get(), pOutputBuffer.get() + output.pos);
+					dst.append(pOutputBuffer.get(), output.pos);
 				}
 			}
 
@@ -106,16 +139,115 @@ namespace s3d
 
 			if (remainingToFlush)
 			{
-				return ByteArray();
+				return false;
 			}
 
-			buffer.insert(buffer.end(), pOutputBuffer.get(), pOutputBuffer.get() + output.pos);
+			dst.append(pOutputBuffer.get(), output.pos);
 
-			return ByteArray(std::move(buffer));
+			return true;
 		}
 
-		bool CompressToFile(const ByteArrayViewAdapter view, const FilePath& outputPath, const int32 compressionLevel)
+		bool CompressToFile(const void* data, const size_t size, const FilePathView outputPath, const int32 compressionLevel)
 		{
+			const size_t inputBufferSize = ZSTD_CStreamInSize();
+			const size_t outputBufferSize = ZSTD_CStreamOutSize();
+			const auto pOutputBuffer = std::make_unique<Byte[]>(outputBufferSize);
+
+			ZSTD_CStream* const cStream = ZSTD_createCStream();
+
+			if (not cStream)
+			{
+				return false;
+			}
+
+			if (const size_t ret = ZSTD_initCStream(cStream, compressionLevel); 
+				ZSTD_isError(ret))
+			{
+				ZSTD_freeCStream(cStream);
+				return false;
+			}
+
+			size_t toRead = inputBufferSize;
+
+			BinaryWriter writer{ outputPath };
+
+			if (not writer)
+			{
+				ZSTD_freeCStream(cStream);
+				return false;
+			}
+
+			size_t readPos = 0;
+
+			for (;;)
+			{
+				const size_t read = Min(toRead, (size - readPos));
+
+				if (read == 0)
+				{
+					break;
+				}
+
+				ZSTD_inBuffer input = { (static_cast<const Byte*>(data) + readPos), read, 0 };
+
+				readPos += read;
+
+				while (input.pos < input.size)
+				{
+					ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
+
+					toRead = ZSTD_compressStream(cStream, &output, &input);
+
+					if (ZSTD_isError(toRead))
+					{
+						writer.clear();
+
+						ZSTD_freeCStream(cStream);
+
+						return false;
+					}
+
+					if (toRead > inputBufferSize)
+					{
+						toRead = inputBufferSize;
+					}
+
+					writer.write(pOutputBuffer.get(), output.pos);
+				}
+			}
+
+			ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
+
+			const size_t remainingToFlush = ZSTD_endStream(cStream, &output);
+
+			ZSTD_freeCStream(cStream);
+
+			if (remainingToFlush)
+			{
+				writer.clear();
+
+				return false;
+			}
+
+			writer.write(pOutputBuffer.get(), output.pos);
+
+			return true;
+		}
+
+		bool CompressToFile(const Blob& blob, const FilePathView outputPath, const int32 compressionLevel)
+		{
+			return CompressToFile(blob.data(), blob.size(), outputPath, compressionLevel);
+		}
+
+		bool CompressFileToFile(const FilePathView inputPath, const FilePathView outputPath, const int32 compressionLevel)
+		{
+			BinaryReader reader{ inputPath };
+
+			if (not reader)
+			{
+				return false;
+			}
+
 			const size_t inputBufferSize = ZSTD_CStreamInSize();
 			const auto pInputBuffer = std::make_unique<Byte[]>(inputBufferSize);
 
@@ -124,14 +256,13 @@ namespace s3d
 
 			ZSTD_CStream* const cStream = ZSTD_createCStream();
 
-			if (!cStream)
+			if (not cStream)
 			{
 				return false;
 			}
 
-			const size_t initResult = ZSTD_initCStream(cStream, compressionLevel);
-
-			if (ZSTD_isError(initResult))
+			if (const size_t ret = ZSTD_initCStream(cStream, compressionLevel); 
+				ZSTD_isError(ret))
 			{
 				ZSTD_freeCStream(cStream);
 				return false;
@@ -139,27 +270,16 @@ namespace s3d
 
 			size_t toRead = inputBufferSize;
 
-			BinaryWriter writer(outputPath);
+			BinaryWriter writer{ outputPath };
 
-			if (!writer)
+			if (not writer)
 			{
 				ZSTD_freeCStream(cStream);
 				return false;
 			}
 
-			ReaderView reader(view.data(), view.size());
-
-			for (;;)
+			while (const size_t read = static_cast<size_t>(reader.read(pInputBuffer.get(), toRead)))
 			{
-				const size_t read = std::min<size_t>(toRead, view.size() - static_cast<size_t>(reader.getPos()));
-
-				if (read == 0)
-				{
-					break;
-				}
-
-				reader.read(pInputBuffer.get(), read);
-
 				ZSTD_inBuffer input = { pInputBuffer.get(), read, 0 };
 
 				while (input.pos < input.size)
@@ -204,227 +324,204 @@ namespace s3d
 			return true;
 		}
 
-		bool CompressFileToFile(const FilePath& inputPath, const FilePath& outputPath, const int32 compressionLevel)
+		Blob Decompress(const void* data, const size_t size)
 		{
-			BinaryReader reader(inputPath);
-			
-			if (!reader)
+			Blob blob;
+
+			if (not Decompress(data, size, blob))
 			{
-				return false;
+				return{};
 			}
 
-			const size_t inputBufferSize = ZSTD_CStreamInSize();
-			const auto pInputBuffer = std::make_unique<Byte[]>(inputBufferSize);
-
-			const size_t outputBufferSize = ZSTD_CStreamOutSize();
-			const auto pOutputBuffer = std::make_unique<Byte[]>(outputBufferSize);
-
-			ZSTD_CStream* const cStream = ZSTD_createCStream();
-
-			if (!cStream)
-			{
-				return false;
-			}
-
-			const size_t initResult = ZSTD_initCStream(cStream, compressionLevel);
-
-			if (ZSTD_isError(initResult))
-			{
-				ZSTD_freeCStream(cStream);
-				return false;
-			}
-
-			size_t toRead = inputBufferSize;
-
-			BinaryWriter writer(outputPath);
-
-			if (!writer)
-			{
-				ZSTD_freeCStream(cStream);
-				return false;
-			}
-
-			while (const size_t read = static_cast<size_t>(reader.read(pInputBuffer.get(), toRead)))
-			{
-				ZSTD_inBuffer input = { pInputBuffer.get(), read, 0 };
-
-				while (input.pos < input.size)
-				{
-					ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
-
-					toRead = ZSTD_compressStream(cStream, &output, &input);
-
-					if (ZSTD_isError(toRead))
-					{
-						writer.clear();
-
-						ZSTD_freeCStream(cStream);
-
-						return false;
-					}
-
-					if (toRead > inputBufferSize)
-					{
-						toRead = inputBufferSize;
-					}
-
-					writer.write(pOutputBuffer.get(), output.pos);
-				}
-			}
-
-			ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
-
-			const size_t remainingToFlush = ZSTD_endStream(cStream, &output);
-
-			ZSTD_freeCStream(cStream);
-
-			if (remainingToFlush)
-			{
-				writer.clear();
-
-				return false;
-			}
-
-			writer.write(pOutputBuffer.get(), output.pos);
-
-			return true;
+			return blob;
 		}
 
-		ByteArray Decompress(const ByteArrayView view)
+		bool Decompress(const void* data, const size_t size, Blob& dst)
 		{
-			const uint64 originalSize = ZSTD_getDecompressedSize(view.data(), view.size());
-
-			if (originalSize == 0)
-			{
-				return ByteArray();
-			}
-
-			Array<Byte> outputBuffer(static_cast<size_t>(originalSize));
-
-			const size_t decompressedSize = ZSTD_decompress(outputBuffer.data(), outputBuffer.size(), view.data(), view.size());
-
-			if (originalSize != decompressedSize)
-			{
-				return ByteArray();
-			}
-
-			return ByteArray(std::move(outputBuffer));
-		}
-
-		ByteArray DecompressFile(const FilePath& path)
-		{
-			BinaryReader reader(path);
-
-			if (!reader)
-			{
-				return ByteArray();
-			}
+			dst.clear();
 
 			const size_t inputBufferSize = ZSTD_DStreamInSize();
-			const auto pInputBuffer = std::make_unique<Byte[]>(inputBufferSize);
-
 			const size_t outputBufferSize = ZSTD_DStreamOutSize();
 			const auto pOutputBuffer = std::make_unique<Byte[]>(outputBufferSize);
 
 			ZSTD_DStream* const dStream = ZSTD_createDStream();
 
-			if (!dStream)
-			{
-				return ByteArray();
-			}
-
-			const size_t initResult = ZSTD_initDStream(dStream);
-
-			if (ZSTD_isError(initResult))
-			{
-				ZSTD_freeDStream(dStream);
-				return ByteArray();
-			}
-
-			size_t toRead = initResult;
-
-			Array<Byte> buffer;
-
-			while (const size_t read = static_cast<size_t>(reader.read(pInputBuffer.get(), toRead)))
-			{
-				ZSTD_inBuffer input = { pInputBuffer.get(), read, 0 };
-
-				while (input.pos < input.size)
-				{
-					ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
-
-					toRead = ZSTD_decompressStream(dStream, &output, &input);
-
-					if (ZSTD_isError(toRead))
-					{
-						ZSTD_freeDStream(dStream);
-						return ByteArray();
-					}
-
-					buffer.insert(buffer.end(), pOutputBuffer.get(), pOutputBuffer.get() + output.pos);
-				}
-			}
-
-			ZSTD_freeDStream(dStream);
-
-			return ByteArray(std::move(buffer));
-		}
-
-		bool DecompressToFile(const ByteArrayView view, const FilePath& outputPath)
-		{
-			const size_t inputBufferSize = ZSTD_DStreamInSize();
-			const auto pInputBuffer = std::make_unique<Byte[]>(inputBufferSize);
-
-			const size_t outputBufferSize = ZSTD_DStreamOutSize();
-			const auto pOutputBuffer = std::make_unique<Byte[]>(outputBufferSize);
-
-			ZSTD_DStream* const dStream = ZSTD_createDStream();
-
-			if (!dStream)
+			if (not dStream)
 			{
 				return false;
 			}
 
-			const size_t initResult = ZSTD_initDStream(dStream);
-
-			if (ZSTD_isError(initResult))
+			if (const size_t ret = ZSTD_initDStream(dStream); 
+				ZSTD_isError(ret))
 			{
 				ZSTD_freeDStream(dStream);
 				return false;
 			}
 
-			size_t toRead = initResult;
-
-			BinaryWriter writer(outputPath);
-
-			if (!writer)
-			{
-				ZSTD_freeDStream(dStream);
-				return false;
-			}
-
-			ReaderView reader(view.data(), view.size());
+			size_t readPos = 0;
 
 			for (;;)
 			{
-				const size_t read = std::min<size_t>(toRead, view.size() - static_cast<size_t>(reader.getPos()));
+				const size_t read = Min(inputBufferSize, (size - readPos));
 
 				if (read == 0)
 				{
 					break;
 				}
 
-				reader.read(pInputBuffer.get(), read);
+				ZSTD_inBuffer input = { (static_cast<const Byte*>(data) + readPos), read, 0 };
 
+				readPos += read;
+
+				while (input.pos < input.size)
+				{
+					ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
+
+					if (const size_t ret = ZSTD_decompressStream(dStream, &output, &input); 
+						ZSTD_isError(ret))
+					{
+						dst.clear();
+
+						ZSTD_freeDStream(dStream);
+
+						return false;
+					}
+
+					dst.append(pOutputBuffer.get(), output.pos);
+				}
+			}
+
+			ZSTD_freeDStream(dStream);
+
+			return true;
+		}
+
+		Blob Decompress(const Blob& blob)
+		{
+			return Decompress(blob.data(), blob.size());
+		}
+
+		bool Decompress(const Blob& blob, Blob& dst)
+		{
+			return Decompress(blob.data(), blob.size(), dst);
+		}
+
+		Blob DecompressFile(const FilePathView path)
+		{
+			Blob blob;
+
+			if (not DecompressFile(path, blob))
+			{
+				return{};
+			}
+
+			return blob;
+		}
+
+		bool DecompressFile(const FilePathView path, Blob& dst)
+		{
+			dst.clear();
+
+			BinaryReader reader{ path };
+
+			if (not reader)
+			{
+				return false;
+			}
+
+			const size_t inputBufferSize = ZSTD_DStreamInSize();
+			const auto pInputBuffer = std::make_unique<Byte[]>(inputBufferSize);
+
+			const size_t outputBufferSize = ZSTD_DStreamOutSize();
+			const auto pOutputBuffer = std::make_unique<Byte[]>(outputBufferSize);
+
+			ZSTD_DStream* const dStream = ZSTD_createDStream();
+
+			if (not dStream)
+			{
+				return false;
+			}
+
+			if (const size_t ret = ZSTD_initDStream(dStream); 
+				ZSTD_isError(ret))
+			{
+				ZSTD_freeDStream(dStream);
+				return false;
+			}
+
+			while (const size_t read = static_cast<size_t>(reader.read(pInputBuffer.get(), inputBufferSize)))
+			{
 				ZSTD_inBuffer input = { pInputBuffer.get(), read, 0 };
 
 				while (input.pos < input.size)
 				{
 					ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
 
-					toRead = ZSTD_decompressStream(dStream, &output, &input);
+					if (const size_t ret = ZSTD_decompressStream(dStream, &output, &input); 
+						ZSTD_isError(ret))
+					{
+						ZSTD_freeDStream(dStream);
+						return false;
+					}
 
-					if (ZSTD_isError(toRead))
+					dst.append(pOutputBuffer.get(), output.pos);
+				}
+			}
+
+			ZSTD_freeDStream(dStream);
+
+			return true;
+		}
+
+		bool DecompressToFile(const void* data, const size_t size, const FilePathView outputPath)
+		{
+			const size_t inputBufferSize = ZSTD_DStreamInSize();
+			const size_t outputBufferSize = ZSTD_DStreamOutSize();
+			const auto pOutputBuffer = std::make_unique<Byte[]>(outputBufferSize);
+
+			ZSTD_DStream* const dStream = ZSTD_createDStream();
+
+			if (not dStream)
+			{
+				return false;
+			}
+
+			if (const size_t ret = ZSTD_initDStream(dStream); 
+				ZSTD_isError(ret))
+			{
+				ZSTD_freeDStream(dStream);
+				return false;
+			}
+
+			BinaryWriter writer{ outputPath };
+
+			if (not writer)
+			{
+				ZSTD_freeDStream(dStream);
+				return false;
+			}
+
+			size_t readPos = 0;
+
+			for (;;)
+			{
+				const size_t read = Min<size_t>(inputBufferSize, (size - readPos));
+
+				if (read == 0)
+				{
+					break;
+				}
+
+				ZSTD_inBuffer input = { (static_cast<const Byte*>(data) + readPos), read, 0 };
+
+				readPos += read;
+
+				while (input.pos < input.size)
+				{
+					ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
+
+					if (const size_t ret = ZSTD_decompressStream(dStream, &output, &input); 
+						ZSTD_isError(ret))
 					{
 						writer.clear();
 
@@ -442,11 +539,16 @@ namespace s3d
 			return true;
 		}
 
-		bool DecompressFileToFile(const FilePath& inputPath, const FilePath& outputPath)
+		bool DecompressToFile(const Blob& blob, const FilePathView outputPath)
 		{
-			BinaryReader reader(inputPath);
+			return DecompressToFile(blob.data(), blob.size(), outputPath);
+		}
 
-			if (!reader)
+		bool DecompressFileToFile(const FilePathView inputPath, const FilePathView outputPath)
+		{
+			BinaryReader reader{ inputPath };
+
+			if (not reader)
 			{
 				return false;
 			}
@@ -459,30 +561,27 @@ namespace s3d
 
 			ZSTD_DStream* const dStream = ZSTD_createDStream();
 
-			if (!dStream)
+			if (not dStream)
 			{
 				return false;
 			}
 
-			const size_t initResult = ZSTD_initDStream(dStream);
-
-			if (ZSTD_isError(initResult))
-			{
-				ZSTD_freeDStream(dStream);
-				return false;
-			}
-
-			size_t toRead = initResult;
-
-			BinaryWriter writer(outputPath);
-
-			if (!writer)
+			if (const size_t ret = ZSTD_initDStream(dStream);
+				ZSTD_isError(ret))
 			{
 				ZSTD_freeDStream(dStream);
 				return false;
 			}
 
-			while (const size_t read = static_cast<size_t>(reader.read(pInputBuffer.get(), toRead)))
+			BinaryWriter writer{ outputPath };
+
+			if (not writer)
+			{
+				ZSTD_freeDStream(dStream);
+				return false;
+			}
+
+			while (const size_t read = static_cast<size_t>(reader.read(pInputBuffer.get(), inputBufferSize)))
 			{
 				ZSTD_inBuffer input = { pInputBuffer.get(), read, 0 };
 
@@ -490,9 +589,8 @@ namespace s3d
 				{
 					ZSTD_outBuffer output = { pOutputBuffer.get(), outputBufferSize, 0 };
 
-					toRead = ZSTD_decompressStream(dStream, &output, &input);
-
-					if (ZSTD_isError(toRead))
+					if (const size_t ret = ZSTD_decompressStream(dStream, &output, &input); 
+						ZSTD_isError(ret))
 					{
 						writer.clear();
 

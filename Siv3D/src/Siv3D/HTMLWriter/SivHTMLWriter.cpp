@@ -2,8 +2,8 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
@@ -14,7 +14,6 @@
 # include <Siv3D/HTMLWriter.hpp>
 # include <Siv3D/Base64.hpp>
 # include <Siv3D/Image.hpp>
-# include <Siv3D/MemoryWriter.hpp>
 # include "HTMLWriterDetail.hpp"
 
 namespace s3d
@@ -32,24 +31,24 @@ namespace s3d
 				switch (ch)
 				{
 				case U'\n':
-					new_string.append(U"<br>", 4);
+					new_string.append(U"<br>"_sv);
 					break;
 				case U'\r':
 					break;
 				case U'\"':
-					new_string.append(U"&quot;", 6);
+					new_string.append(U"&quot;"_sv);
 					break;
 				case U'&':
-					new_string.append(U"&amp;", 5);
+					new_string.append(U"&amp;"_sv);
 					break;
 				case U'\'':
-					new_string.append(U"&apos;", 6);
+					new_string.append(U"&apos;"_sv);
 					break;
 				case U'<':
-					new_string.append(U"&lt;", 4);
+					new_string.append(U"&lt;"_sv);
 					break;
 				case U'>':
-					new_string.append(U"&gt;", 4);
+					new_string.append(U"&gt;"_sv);
 					break;
 				default:
 					new_string.push_back(ch);
@@ -85,23 +84,20 @@ th,td{
 	}
 
 	HTMLWriter::HTMLWriter()
-		: pImpl(std::make_shared<HTMLWriterDetail>())
-	{
+		: pImpl{ std::make_shared<HTMLWriterDetail>() } {}
 
-	}
-
-	HTMLWriter::HTMLWriter(const FilePath& path, const String& title, const StringView styleSheet)
-		: HTMLWriter()
+	HTMLWriter::HTMLWriter(const FilePathView path, const StringView title, const StringView styleSheet)
+		: HTMLWriter{}
 	{
 		open(path, title, styleSheet);
 	}
 
 	HTMLWriter::~HTMLWriter()
 	{
-
+		// do nothing
 	}
 
-	bool HTMLWriter::open(const FilePath& path, const String& title, const StringView styleSheet)
+	bool HTMLWriter::open(const FilePathView path, const StringView title, const StringView styleSheet)
 	{
 		return pImpl->open(path, title, styleSheet);
 	}
@@ -111,14 +107,14 @@ th,td{
 		pImpl->close();
 	}
 
-	bool HTMLWriter::isOpened() const
+	bool HTMLWriter::isOpen() const noexcept
 	{
-		return pImpl->isOpened();
+		return pImpl->isOpen();
 	}
 
-	HTMLWriter::operator bool() const
+	HTMLWriter::operator bool() const noexcept
 	{
-		return isOpened();
+		return isOpen();
 	}
 
 	void HTMLWriter::writeRaw(const StringView view)
@@ -160,7 +156,7 @@ th,td{
 		pImpl->writeRaw(U"</ol>\n");
 	}
 
-	void HTMLWriter::writeTable(const Grid<String>& items, const bool hasHeader)
+	void HTMLWriter::writeTable(const Grid<String>& items, const HasHeader hasHeader)
 	{
 		pImpl->writeRaw(U"<table>\n");
 		{
@@ -181,7 +177,7 @@ th,td{
 				pImpl->writeRaw(U"</tr>\n");
 			}
 
-			for (size_t y = hasHeader; y < items.height(); ++y)
+			for (size_t y = hasHeader.getBool(); y < items.height(); ++y)
 			{
 				pImpl->writeRaw(U"<tr>\n");
 				{
@@ -205,14 +201,16 @@ th,td{
 	{
 		pImpl->writeRaw(U"<img src=\"data:image/png;base64,");
 
-		pImpl->writeRaw(Base64::Encode(image.encode(ImageFormat::PNG).view()));
+		const Blob blob = image.encode(ImageFormat::PNG);
+
+		pImpl->writeRaw(Base64::Encode(blob.data(), blob.size()));
 
 		const Size s = size.value_or(image.size());
 
 		pImpl->writeRaw(U"\" width=\"" + Format(s.x) + U"\" height=\"" + Format(s.y) + U"\">\n");
 	}
 
-	void HTMLWriter::writeImage(const FilePath& url, const Optional<Size>& size)
+	void HTMLWriter::writeImage(const FilePathView url, const Optional<Size>& size)
 	{
 		pImpl->writeRaw(U"<img src=\"" + url);
 

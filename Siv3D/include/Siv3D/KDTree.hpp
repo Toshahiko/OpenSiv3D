@@ -2,19 +2,19 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include "Fwd.hpp"
-
-SIV3D_DISABLE_MSVC_WARNINGS_PUSH(4127)
+# include "Common.hpp"
+# include "Array.hpp"
+# include "YesNo.hpp"
+# include "PredefinedYesNo.hpp"
 # include <ThirdParty/nanoflann/nanoflann.hpp>
-SIV3D_DISABLE_MSVC_WARNINGS_POP()
 
 namespace s3d
 {
@@ -25,163 +25,124 @@ namespace s3d
 		{
 		public:
 
-			using point_type = typename DatasetAdapter::point_type;
+			using point_type	= typename DatasetAdapter::point_type;
 
-			using element_type = typename DatasetAdapter::element_type;
+			using element_type	= typename DatasetAdapter::element_type;
 
-			using dataset_type = typename DatasetAdapter::dataset_type;
+			using dataset_type	= typename DatasetAdapter::dataset_type;
 
 			static constexpr int32 Dimensions = DatasetAdapter::Dimensions;
 
-			static_assert(sizeof(point_type) == sizeof(element_type) * Dimensions);
+			explicit KDAdapter(const dataset_type& dataset);
+
+			[[nodiscard]]
+			size_t kdtree_get_point_count() const;
+
+			[[nodiscard]]
+			element_type kdtree_get_pt(const size_t index, const size_t dim) const;
+
+			template <class BBOX>
+			bool kdtree_get_bbox(BBOX&) const;
+
+			[[nodiscard]]
+			static const element_type* GetPointer(const point_type& point);
 
 		private:
 
+			static_assert(sizeof(point_type) == sizeof(element_type) * Dimensions);
+
 			const dataset_type& m_dataset;
-
-		public:
-
-			explicit KDAdapter(const dataset_type& dataset)
-				: m_dataset(dataset) {}
-
-			[[nodiscard]] size_t kdtree_get_point_count() const
-			{
-				return std::size(m_dataset);
-			}
-
-			[[nodiscard]] element_type kdtree_get_pt(const size_t index, const size_t dim) const
-			{
-				return DatasetAdapter::GetElement(m_dataset, index, dim);
-			}
-
-			[[nodiscard]] element_type kdtree_distance(const element_type* p0, const size_t index_p1, size_t) const
-			{
-				return DatasetAdapter::DistanceSq(m_dataset, index_p1, p0);
-			}
-
-			template <class BBOX>
-			bool kdtree_get_bbox(BBOX&) const
-			{
-				return false;
-			}
-
-			[[nodiscard]] static const element_type* GetPointer(const point_type& point)
-			{
-				return DatasetAdapter::GetPointer(point);
-			}
 		};
 	}
 
+	/// @brief kd-tree
+	/// @tparam DatasetAdapter kd-tree 用のアダプタ型
 	template <class DatasetAdapter>
 	class KDTree
 	{
 	public:
 
-		using adapter_type = detail::KDAdapter<DatasetAdapter>;
+		using adapter_type	= detail::KDAdapter<DatasetAdapter>;
 
-		using point_type = typename adapter_type::point_type;
+		using point_type	= typename adapter_type::point_type;
 
-		using element_type = typename adapter_type::element_type;
+		using element_type	= typename adapter_type::element_type;
 
-		using dataset_type = typename adapter_type::dataset_type;
+		using dataset_type	= typename adapter_type::dataset_type;
 
 		static constexpr int32 Dimensions = adapter_type::Dimensions;
+
+		/// @brief デフォルトコンストラクタ
+		KDTree() = default;
+
+		/// @brief kd-tree を構築します。
+		/// @param dataset データセット
+		explicit KDTree(const dataset_type& dataset);
+
+		/// @brief ツリーを再構築します。
+		void rebuildIndex();
+
+		/// @brief kd-tree を消去し、メモリから解放します。
+		void release();
+
+		/// @brief kd-tree が消費しているメモリのサイズ（バイト）を返します。
+		/// @return kd-tree が消費しているメモリのサイズ（バイト）
+		[[nodiscard]]
+		size_t usedMemory() const;
+
+		/// @brief 指定した座標から最も近い k 個の要素を検索して返します。
+		/// @param k 検索する個数
+		/// @param point 座標
+		/// @return 見つかった要素一覧
+		[[nodiscard]]
+		Array<size_t> knnSearch(size_t k, const point_type& point) const;
+
+		/// @brief 指定した座標から最も近い k 個の要素を検索して取得します。
+		/// @param results 結果を格納する配列
+		/// @param k 検索する個数
+		/// @param point 中心座標
+		void knnSearch(Array<size_t>& results, size_t k, const point_type& point) const;
+
+		/// @brief 指定した座標から最も近い k 個の要素を検索して取得します。
+		/// @param results 結果を格納する配列
+		/// @param distanceSqResults それぞれの要素について、中心からの距離を格納する配列
+		/// @param k 検索する個数
+		/// @param point 中心座標
+		void knnSearch(Array<size_t>& results, Array<element_type>& distanceSqResults, size_t k, const point_type& point) const;
+
+		/// @brief 指定した座標から指定した半径以内にある要素一覧を検索して返します。
+		/// @param point 中心座標
+		/// @param radius 半径
+		/// @param sortByDistance 結果を中心座標から近い順にソートする場合 `SortByDistance::Yes`, それ以外の場合は `SortByDistance::No`
+		/// @return 指定した位置から指定した半径以内にある要素一覧
+		[[nodiscard]]
+		Array<size_t> radiusSearch(const point_type& point, element_type radius, SortByDistance sortByDistance = SortByDistance::No) const;
+
+		/// @brief 指定した座標から指定した半径以内にある要素一覧を検索して取得します。
+		/// @param results 結果を格納する配列
+		/// @param point 中心座標
+		/// @param radius 半径
+		/// @param sortByDistance 結果を中心座標から近い順にソートする場合 `SortByDistance::Yes`, それ以外の場合は `SortByDistance::No`
+		void radiusSearch(Array<size_t>& results, const point_type& point, element_type radius, const SortByDistance sortByDistance = SortByDistance::No) const;
 
 	private:
 
 		adapter_type m_adapter;
 
-		nanoflann::KDTreeSingleIndexAdaptor<nanoflann::L2_Simple_Adaptor<element_type, adapter_type>, adapter_type, Dimensions> m_index;
-
-	public:
-
-		KDTree() = default;
-
-		explicit KDTree(const dataset_type& dataset)
-			: m_adapter(dataset)
-			, m_index(Dimensions, m_adapter, nanoflann::KDTreeSingleIndexAdaptorParams(10))
-		{
-			rebuildIndex();
-		}
-
-		void rebuildIndex()
-		{
-			m_index.buildIndex();
-		}
-
-		void release()
-		{
-			m_index.freeIndex();
-		}
-
-		[[nodiscard]] size_t usedMemory() const
-		{
-			return m_index.usedMemory();
-		}
-
-		[[nodiscard]] Array<size_t> knnSearch(size_t k, const point_type& point) const
-		{
-			Array<size_t> results;
-
-			knnSearch(results, k, point);
-
-			return results;
-		}
-
-		void knnSearch(Array<size_t>& results, size_t k, const point_type& point) const
-		{
-			results.resize(k);
-
-			Array<element_type> distanceSqs(k);
-
-			k = m_index.knnSearch(adapter_type::GetPointer(point), k, &results[0], &distanceSqs[0]);
-
-			results.resize(k);
-		}
-
-		void knnSearch(Array<size_t>& results, Array<element_type>& distanceSqResults, size_t k, const point_type& point) const
-		{
-			results.resize(k);
-			distanceSqResults.resize(k);
-
-			k = m_index.knnSearch(adapter_type::GetPointer(point), k, &results[0], &distanceSqResults[0]);
-
-			results.resize(k);
-			distanceSqResults.resize(k);
-		}
-
-		[[nodiscard]] Array<size_t> radiusSearch(const point_type& point, const element_type radius, const bool sortByDistance = false) const
-		{
-			Array<size_t> results;
-
-			radiusSearch(results, point, radius, sortByDistance);
-
-			return results;
-		}
-
-		void radiusSearch(Array<size_t>& results, const point_type& point, const element_type radius, const bool sortByDistance = false) const
-		{
-			std::vector<std::pair<size_t, element_type>> matches;
-
-			const nanoflann::SearchParams params(32, 0.0f, sortByDistance);
-
-			const size_t num_matches = m_index.radiusSearch(adapter_type::GetPointer(point), radius * radius, matches, params);
-
-			results.resize(num_matches);
-
-			for (size_t i = 0; i < num_matches; ++i)
-			{
-				results[i] = matches[i].first;
-			}
-		}
+		nanoflann::KDTreeSingleIndexAdaptor<nanoflann::L2_Simple_Adaptor<element_type, adapter_type, double>, adapter_type, Dimensions, size_t> m_index;
 	};
 
-	template <class Dataset, class Point, class Element, int32 Dim>
+	template <class Dataset, class PointType, class ElementType = typename PointType::value_type, int32 Dim = PointType::Dimension>
 	struct KDTreeAdapter
 	{
 		using dataset_type	= Dataset;
-		using point_type	= Point;
-		using element_type	= Element;
+		
+		using point_type	= PointType;
+		
+		using element_type	= ElementType;
+		
 		static constexpr int32 Dimensions = Dim;
 	};
 }
+
+# include "detail/KDTree.ipp"

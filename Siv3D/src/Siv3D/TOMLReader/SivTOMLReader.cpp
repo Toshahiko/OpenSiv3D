@@ -1,24 +1,18 @@
-//-----------------------------------------------
+﻿//-----------------------------------------------
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
-// s3d::TOMLReader is originally created by azaika (OpenSiv3D Project)
-//-----------------------------------------------
 
-# include <cpptoml/cpptoml.h>
+# include <ThirdParty/cpptoml/cpptoml.h>
 # include <Siv3D/TOMLReader.hpp>
-# include <Siv3D/Optional.hpp>
-# include <Siv3D/String.hpp>
 # include <Siv3D/Time.hpp>
-# include <Siv3D/DateTime.hpp>
 # include <Siv3D/TextReader.hpp>
-# include <Siv3D/Format.hpp>
 
 namespace s3d
 {
@@ -61,7 +55,7 @@ namespace s3d
 			TOMLValueDetail() = default;
 
 			explicit TOMLValueDetail(const std::shared_ptr<cpptoml::base>& _value)
-				: ptr(_value) {}
+				: ptr{ _value } {}
 		};
 	}
 
@@ -327,10 +321,9 @@ namespace s3d
 		return getType() == TOMLValueType::DateTime;
 	}
 
-	template <>
-	Optional<int64> TOMLValue::getOpt<int64>() const
+	Optional<int64> TOMLValue::getOptInt64() const
 	{
-		if (!isNumber())
+		if (not isNumber())
 		{
 			return none;
 		}
@@ -350,10 +343,9 @@ namespace s3d
 		return none;
 	}
 
-	template <>
-	Optional<double> TOMLValue::getOpt<double>() const
+	Optional<double> TOMLValue::getOptDouble() const
 	{
-		if (!isNumber())
+		if (not isNumber())
 		{
 			return none;
 		}
@@ -365,10 +357,10 @@ namespace s3d
 		return none;
 	}
 
-	template <>
-	Optional<bool> TOMLValue::getOpt<bool>() const
+	Optional<bool> TOMLValue::getOptBool() const
 	{
-		if (!isBool()) {
+		if (not isBool())
+		{
 			return none;
 		}
 
@@ -521,15 +513,14 @@ namespace s3d
 		return String();
 	}
 
-	template <>
-	Optional<String> TOMLValue::getOpt<String>() const
+	Optional<String> TOMLValue::getOptString() const
 	{
-		if (!isString())
+		if (not isString())
 		{
 			return none;
 		}
 
-		return Optional<String>(InPlace, getString());
+		return getString();
 	}
 
 	////////////////////////////////
@@ -554,15 +545,14 @@ namespace s3d
 		return Date();
 	}
 
-	template <>
-	Optional<Date> TOMLValue::getOpt<Date>() const
+	Optional<Date> TOMLValue::getOptDate() const
 	{
-		if (!isDate())
+		if (not isDate())
 		{
 			return none;
 		}
 
-		return Optional<Date>(InPlace, getDate());
+		return getDate();
 	}
 
 	////////////////////////////////
@@ -629,40 +619,46 @@ namespace s3d
 		return str;
 	}
 
-	template <>
-	Optional<DateTime> TOMLValue::getOpt<DateTime>() const
+	Optional<DateTime> TOMLValue::getOptDateTime() const
 	{
-		if (!isDateTime())
+		if (not isDateTime())
 		{
 			return none;
 		}
 
-		return Optional<DateTime>(InPlace, getDateTime());
+		return getDateTime();
 	}
 
 	////////////////////////////////
 	//
 	//  TOMLReader
 	//
-	TOMLReader::TOMLReader(const FilePath& path)
+	TOMLReader::TOMLReader(const FilePathView path)
 	{
 		open(path);
 	}
 
-	TOMLReader::TOMLReader(const std::shared_ptr<IReader>& reader)
+	TOMLReader::TOMLReader(std::unique_ptr<IReader>&& reader)
 	{
-		open(reader);
+		open(std::move(reader));
 	}
 
-	bool TOMLReader::open(const FilePath& path)
+	bool TOMLReader::open(const FilePathView path)
 	{
-		if (isOpened())
+		if (isOpen())
 		{
 			close();
 		}
 
+		TextReader textReader{ path };
+
+		if (not textReader)
+		{
+			return false;
+		}
+
 		std::stringstream ss;
-		ss << TextReader(path).readAll().toUTF8();
+		ss << textReader.readAll().toUTF8();
 
 		try
 		{
@@ -676,15 +672,22 @@ namespace s3d
 		return m_detail != nullptr;
 	}
 
-	bool TOMLReader::open(const std::shared_ptr<IReader>& reader)
+	bool TOMLReader::open(std::unique_ptr<IReader>&& reader)
 	{
-		if (isOpened())
+		if (isOpen())
 		{
 			close();
 		}
 
+		TextReader textReader{ std::move(reader) };
+
+		if (not textReader)
+		{
+			return false;
+		}
+
 		std::stringstream ss;
-		ss << TextReader(reader).readAll().toUTF8();
+		ss << textReader.readAll().toUTF8();
 
 		try
 		{
@@ -703,14 +706,14 @@ namespace s3d
 		m_detail.reset();
 	}
 
-	bool TOMLReader::isOpened() const noexcept
+	bool TOMLReader::isOpen() const noexcept
 	{
 		return m_detail != nullptr;
 	}
 
 	TOMLReader::operator bool() const noexcept
 	{
-		return isOpened();
+		return isOpen();
 	}
 
 	////////////////////////////////
@@ -725,7 +728,7 @@ namespace s3d
 
 	void Formatter(FormatData& formatData, const TOMLReader& reader)
 	{
-		if (!reader.isEmpty())
+		if (reader)
 		{
 			Formatter(formatData, static_cast<TOMLValue>(reader));
 		}

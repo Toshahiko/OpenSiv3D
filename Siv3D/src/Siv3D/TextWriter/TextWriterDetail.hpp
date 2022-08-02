@@ -2,8 +2,8 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
@@ -29,20 +29,25 @@ namespace s3d
 
 		~TextWriterDetail();
 
-		bool open(const FilePath& path, OpenMode openMode, TextEncoding encoding);
+		bool open(FilePathView path, OpenMode openMode, TextEncoding encoding);
 
 		void close();
 
-		bool isOpened() const;
+		[[nodiscard]]
+		bool isOpen() const noexcept;
 
 		void clear();
 
-		void write(StringView view);
+		void write(StringView s);
 
 		void writeNewLine();
 
-		void writeUTF8(std::string_view view);
+		void writeUTF8(std::string_view s);
 
-		const FilePath& path() const;
+		[[nodiscard]]
+		TextEncoding encoding() const noexcept;
+
+		[[nodiscard]]
+		const FilePath& path() const noexcept;
 	};
 }

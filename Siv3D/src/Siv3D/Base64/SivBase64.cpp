@@ -2,16 +2,14 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # include <Siv3D/Base64.hpp>
-# include <Siv3D/ByteArrayView.hpp>
-# include <Siv3D/ByteArray.hpp>
 
 namespace s3d
 {
@@ -39,43 +37,31 @@ namespace s3d
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 		};
 
-		static constexpr size_t EncodeLength(const size_t srcLength)
+		[[nodiscard]]
+		inline constexpr size_t EncodeLength(const size_t srcLength) noexcept
 		{
 			return (srcLength / 3 + (srcLength % 3 ? 1 : 0)) * 4;
 		}
 
-		static constexpr size_t DecodeLength(const StringView view)
+		template <class Str>
+		void Encode(const void* data, const size_t size, Str& dst)
 		{
-			size_t length = (view.length() / 4) * 3;
+			dst.clear();
+			dst.resize(detail::EncodeLength(size), '=');
 
-			if (view.length() % 4 == 0 && !view.isEmpty())
-			{
-				length -= (view[view.length() - 2] == U'=') ? 2
-					: (view[view.length() - 1] == U'=') ? 1 : 0;
-			}
-
-			return length;
-		}
-	}
-
-	namespace Base64
-	{
-		String Encode(const void* const data, const size_t size)
-		{
-			String result(detail::EncodeLength(size), U'=');
-			const size_t blocks = size / 3;
-			const size_t remain = size % 3;
+			const size_t block = (size / 3);
+			const size_t remain = (size % 3);
 			const uint8* pSrc = static_cast<const uint8*>(data);
-			const uint8* pSrcBlocksEnd = pSrc + 3 * blocks;
-			char32* pDst = &result[0];
+			const uint8* pSrcBlocksEnd = (pSrc + 3 * block);
+			auto* pDst = dst.data();
 
 			while (pSrc != pSrcBlocksEnd)
 			{
-				const uint32 n = pSrc[0] << 16 | pSrc[1] << 8 | pSrc[2];
+				const uint32 n = ((pSrc[0] << 16) | (pSrc[1] << 8) | pSrc[2]);
 				*pDst++ = detail::chars[(n >> 18)];
 				*pDst++ = detail::chars[(n >> 12) & 0x3f];
-				*pDst++ = detail::chars[(n >>  6) & 0x3f];
-				*pDst++ = detail::chars[(n >>  0) & 0x3f];
+				*pDst++ = detail::chars[(n >> 6) & 0x3f];
+				*pDst++ = detail::chars[(n >> 0) & 0x3f];
 				pSrc += 3;
 			}
 
@@ -87,46 +73,79 @@ namespace s3d
 			}
 			else if (remain == 2)
 			{
-				const uint32 n = (pSrc[0] << 16) | (pSrc[1] << 8);
+				const uint32 n = ((pSrc[0] << 16) | (pSrc[1] << 8));
 				*pDst++ = detail::chars[(n >> 18)];
 				*pDst++ = detail::chars[(n >> 12) & 0x3f];
-				*pDst++ = detail::chars[(n >>  6) & 0x3f];
+				*pDst++ = detail::chars[(n >> 6) & 0x3f];
 			}
-
-			return result;
 		}
 
-		String Encode(const ByteArrayView view)
+		struct Base64Length
 		{
-			return Encode(view.data(), view.size_bytes());
-		}
+			// ブロック数
+			size_t block;
 
-		String Encode(const ByteArrayViewAdapter view)
-		{
-			return Encode(view.data(), view.size_bytes());
-		}
+			// = を含むブロックのデータ文字数 (0, 2, 3 のいずれか）
+			size_t remainder;
 
-		ByteArray Decode(const StringView view)
+			// デコード後のバイナリサイズ
+			size_t binarySize;
+		};
+
+		template <class Ch>
+		[[nodiscard]]
+		inline Base64Length DecodeLength(const Ch* pSrc, size_t inputLength) noexcept
 		{
-			if (view.isEmpty())
+			while (inputLength
+				&& (detail::decodeTable[pSrc[inputLength - 1]] == 0xff))
 			{
-				return ByteArray();
+				--inputLength;
 			}
 
-			Array<Byte> dst(detail::DecodeLength(view));
-			const size_t blocks = view.length() / 4;
-			const size_t remain = view.length() % 4;
-			const char32* pSrc = view.data();
+			const size_t block = (inputLength / 4);
+			const size_t remainder = (inputLength % 4);
+			const size_t baseLength = (block * 3);
+
+			if (remainder == 0) // 4, 8, 12, ...
+			{
+				return{ block, remainder, baseLength };
+			}
+			else if (remainder == 1) // error (invalid)
+			{
+				return{ 0, 0, 0 };
+			}
+			else if (remainder == 2) // 2, 6, 10, 14, ...
+			{
+				return{ block, remainder, (baseLength + 1) };
+			}
+			else // 3, 7, 11, 15, ... 
+			{
+				return{ block, remainder, (baseLength + 2) };
+			}
+		}
+
+		template <class Ch>
+		[[nodiscard]]
+		inline Blob Decode(const Ch* pSrc, const size_t inputLength)
+		{
+			const auto [block, remainder, binarySize] = detail::DecodeLength(pSrc, inputLength);
+
+			if (binarySize == 0)
+			{
+				return{};
+			}
+
+			Array<Byte> dst(binarySize);
 			Byte* pDst = dst.data();
 
-			for (size_t i = 0; i < blocks; ++i)
+			for (size_t i = 0; i < block; ++i)
 			{
-				const uint8 v1 = detail::decodeTable[*pSrc++ & 0xff];
-				const uint8 v2 = detail::decodeTable[*pSrc++ & 0xff];
+				const uint8 v1 = detail::decodeTable[static_cast<uint8>(*pSrc++)];
+				const uint8 v2 = detail::decodeTable[static_cast<uint8>(*pSrc++)];
 
 				*pDst++ = static_cast<Byte>(v1 << 2 | v2 >> 4);
 
-				const uint8 v3 = detail::decodeTable[*pSrc++ & 0xff];
+				const uint8 v3 = detail::decodeTable[static_cast<uint8>(*pSrc++)];
 
 				if (v3 == 0xFF)
 				{
@@ -135,7 +154,7 @@ namespace s3d
 
 				*pDst++ = static_cast<Byte>((v2 << 4 | v3 >> 2) & 0xff);
 
-				const uint8 v4 = detail::decodeTable[*pSrc++ & 0xff];
+				const uint8 v4 = detail::decodeTable[static_cast<uint8>(*pSrc++)];
 
 				if (v4 == 0xFF)
 				{
@@ -145,20 +164,50 @@ namespace s3d
 				*pDst++ = static_cast<Byte>((v3 << 6 | v4) & 0xff);
 			}
 
-			if (remain)
+			if (remainder)
 			{
-				const uint8 v1 = detail::decodeTable[*pSrc++ & 0xff];
-				const uint8 v2 = detail::decodeTable[*pSrc++ & 0xff];
+				const uint8 v1 = detail::decodeTable[static_cast<uint8>(*pSrc++)];
+				const uint8 v2 = detail::decodeTable[static_cast<uint8>(*pSrc++)];
 
 				*pDst++ = static_cast<Byte>(v1 << 2 | v2 >> 4);
 
-				if (remain == 3)
+				if (remainder == 3)
 				{
-					*pDst++ = static_cast<Byte>((v2 << 4 | detail::decodeTable[*pSrc++ & 0xff] >> 2) & 0xff);
+					*pDst++ = static_cast<Byte>((v2 << 4 | detail::decodeTable[static_cast<uint8>(*pSrc++)] >> 2) & 0xff);
 				}
 			}
 
-			return ByteArray(std::move(dst));
+			return Blob{ std::move(dst) };
+		}
+	}
+
+	namespace Base64
+	{
+		String Encode(const void* const data, const size_t size)
+		{
+			String result;
+			detail::Encode(data, size, result);	
+			return result;
+		}
+
+		void Encode(const void* data, size_t size, String& dst)
+		{
+			detail::Encode(data, size, dst);
+		}
+
+		void Encode(const void* data, size_t size, std::string& dst)
+		{
+			detail::Encode(data, size, dst);
+		}
+
+		Blob Decode(const StringView base64)
+		{
+			return detail::Decode(base64.data(), base64.size());
+		}
+
+		Blob Decode(const std::string_view base64)
+		{
+			return detail::Decode(base64.data(), base64.size());
 		}
 	}
 }

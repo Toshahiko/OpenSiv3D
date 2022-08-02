@@ -2,109 +2,100 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include "Fwd.hpp"
+# include "Common.hpp"
 # include "Asset.hpp"
 # include "Texture.hpp"
+# include "TextureAssetData.hpp"
+# include "HashTable.hpp"
 
 namespace s3d
 {
-	/// <summary>
-	/// Texture アセットデータ
-	/// </summary>
-	struct TextureAssetData : IAsset
-	{
-		FilePath path;
-
-		TextureDesc desc = TextureDesc::Unmipped;
-
-		Texture texture;
-
-		std::function<bool(TextureAssetData&)> onPreload;
-
-		std::function<bool(TextureAssetData&)> onUpdate;
-
-		std::function<bool(TextureAssetData&)> onRelease;
-
-		static const String& Name();
-
-		static bool DefaultPreload(TextureAssetData& asset);
-
-		static bool DefaultUpdate(TextureAssetData&);
-
-		static bool DefaultRelease(TextureAssetData& asset);
-
-		TextureAssetData();
-
-		explicit TextureAssetData(
-			const FilePath& _path,
-			TextureDesc _desc = TextureDesc::Unmipped,
-			const AssetParameter& _parameter = AssetParameter(),
-			std::function<bool(TextureAssetData&)> _onPreload = DefaultPreload,
-			std::function<bool(TextureAssetData&)> _onUpdate = DefaultUpdate,
-			std::function<bool(TextureAssetData&)> _onRelease = DefaultRelease);
-
-		bool preload() override;
-
-		void preloadAsync() override;
-
-		bool update() override;
-
-		bool release() override;
-	};
-
-	/// <summary>
-	/// Texture アセット
-	/// </summary>
 	class TextureAsset : public Texture
 	{
 	public:
 
-		TextureAsset(const AssetName& name);
+		SIV3D_NODISCARD_CXX20
+		explicit TextureAsset(AssetNameView name);
 
-		TextureAsset(const AssetName& name, const Texture& dummy);
+		/// @brief テクスチャアセットを登録します。
+		/// @param name テクスチャアセットの登録名
+		/// @param path 登録するテクスチャのファイルパス
+		/// @param desc テクスチャの設定
+		static bool Register(AssetNameView name, FilePathView path, TextureDesc desc = TextureDesc::Unmipped);
 
-		static bool Register(const AssetName& name, const FilePath& path, const AssetParameter& parameter = AssetParameter{});
+		static bool Register(AssetNameView name, FilePathView rgb, FilePathView alpha, TextureDesc desc = TextureDesc::Unmipped);
 
-		static bool Register(const AssetName& name, const FilePath& path, TextureDesc desc, const AssetParameter& parameter = AssetParameter{});
+		static bool Register(AssetNameView name, const Color& rgb, FilePathView alpha, TextureDesc desc = TextureDesc::Unmipped);
 
-		static bool Register(const AssetName& name, const Icon& icon, const AssetParameter& parameter = AssetParameter{});
+		static bool Register(AssetNameView name, const Emoji& emoji, TextureDesc desc = TextureDesc::Mipped);
 
-		static bool Register(const AssetName& name, const Icon& icon, TextureDesc desc, const AssetParameter& parameter = AssetParameter{});
+		static bool Register(AssetNameView name, const Icon& icon, int32 size, TextureDesc desc = TextureDesc::Unmipped);
 
-		static bool Register(const AssetName& name, const Emoji& emoji, const AssetParameter& parameter = AssetParameter{});
+		static bool Register(AssetNameView name, std::unique_ptr<TextureAssetData>&& data);
 
-		static bool Register(const AssetName& name, const Emoji& emoji, TextureDesc desc, const AssetParameter& parameter = AssetParameter{});
 
-		static bool Register(const AssetName& name, const TextureAssetData& data);
+		static bool Register(const AssetNameAndTags& nameAndTags, FilePathView path, TextureDesc desc = TextureDesc::Unmipped);
 
-		[[nodiscard]] static bool IsRegistered(const AssetName& name);
+		static bool Register(const AssetNameAndTags& nameAndTags, FilePathView rgb, FilePathView alpha, TextureDesc desc = TextureDesc::Unmipped);
 
-		static bool Preload(const AssetName& name);
+		static bool Register(const AssetNameAndTags& nameAndTags, const Color& rgb, FilePathView alpha, TextureDesc desc = TextureDesc::Unmipped);
 
-		//static bool PreloadByTag(const AssetTag& tag);
+		static bool Register(const AssetNameAndTags& nameAndTags, const Emoji& emoji, TextureDesc desc = TextureDesc::Mipped);
 
-		//static bool PreloadAll();
+		static bool Register(const AssetNameAndTags& nameAndTags, const Icon& icon, int32 size, TextureDesc desc = TextureDesc::Unmipped);
 
-		static void Release(const AssetName& name);
 
-		//static void ReleaseByTag(const AssetTag& tag);
+		/// @brief 指定したテクスチャアセットが登録されているかを返します。
+		/// @param name テクスチャアセット名
+		/// @return 登録されている場合 true, それ以外の場合は false
+		[[nodiscard]]
+		static bool IsRegistered(AssetNameView name);
 
+		/// @brief 指定したテクスチャアセットを直ちにロードします。
+		/// @param name テクスチャアセット名
+		/// @remark この関数はロード処理が終了するまで制御を返しません。
+		/// @return ロードに成功した場合 true, それ以外の場合は false
+		static bool Load(AssetNameView name);
+
+		/// @brief 指定したテクスチャアセットの非同期ロードを開始します。
+		/// @param name テクスチャアセット名
+		static void LoadAsync(AssetNameView name);
+
+		/// @brief 指定したテクスチャアセットのロードが完了するまで待機します。
+		/// @param name テクスチャアセット名
+		static void Wait(AssetNameView name);
+
+		/// @brief 指定したテクスチャアセットのロード処理が（成否にかかわらず）完了しているかを返します。
+		/// @param name テクスチャアセット名
+		/// @return ロード処理が（成否にかかわらず）完了している場合 true, それ以外の場合は false
+		[[nodiscard]]
+		static bool IsReady(AssetNameView name);
+
+		/// @brief 指定したテクスチャアセットについて、ロードしたデータをメモリ上から削除します。登録状態は維持されます。
+		/// @param name テクスチャアセット名
+		static void Release(AssetNameView name);
+
+		/// @brief すべてのテクスチャアセットについて、ロードしたデータをメモリ上から削除します。登録状態は維持されます。
 		static void ReleaseAll();
 
-		static void Unregister(const AssetName& name);
+		/// @brief 指定したテクスチャアセットについて、ロードしたデータをメモリ上から削除し、登録も解除します。
+		/// @param name テクスチャアセット名
+		static void Unregister(AssetNameView name);
 
-		//static void UnregisterByTag(const AssetTag& tag);
-
+		/// @brief すべてのテクスチャアセットについて、ロードしたデータをメモリ上から削除し、登録も解除します。
 		static void UnregisterAll();
 
-		[[nodiscard]] static bool IsReady(const AssetName& name);
+		/// @brief 登録されているテクスチャアセットの情報一覧を取得します。
+		/// @return 登録されているテクスチャアセットの情報一覧
+		[[nodiscard]]
+		static HashTable<AssetName, AssetInfo> Enumerate();
 	};
 }

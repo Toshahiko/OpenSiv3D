@@ -2,472 +2,107 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include <memory>
-# include "Fwd.hpp"
-# include "String.hpp"
-# include "System.hpp"
-# include "MessageBox.hpp"
+# include "Common.hpp"
 # include "AssetHandle.hpp"
-# include "NamedParameter.hpp"
-# include "EngineLog.hpp"
-# define AS_USE_NAMESPACE
-# include <ThirdParty/angelscript/angelscript.h>
+# include "Array.hpp"
+# include "String.hpp"
+# include "ScriptModule.hpp"
+# include "ScriptCompileOption.hpp"
+# include "ScriptFunction.hpp"
 
 namespace s3d
 {
-	struct ScriptModuleData
+	/// @brief スクリプト (AngelScript)
+	class Script : public AssetHandle<Script>
 	{
-		AngelScript::asIScriptModule* module = nullptr;
-
-		AngelScript::asIScriptContext* context = nullptr;
-
-		uint64 scriptID = 0;
-
-		bool withLineCues = false;
-
-		ScriptModuleData() = default;
-
-		~ScriptModuleData();
-	};
-
-	namespace detail
-	{
-		enum class ScriptUserDataIndex
-		{
-			ScriptID = 3000,
-
-			StepCounter = 3001,
-		};
-
-		void LineCallback(AngelScript::asIScriptContext* ctx, unsigned long*);
-
-		template <class Type>
-		inline void SetArg_(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const Type& value)
-		{
-			moduleData->context->SetArgObject(argIndex, const_cast<Type*>(&value));
-		}
-
-		template <class Type>
-		inline void SetArg_(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, Type& value)
-		{
-			moduleData->context->SetArgObject(argIndex, &value);
-		}
-
-		template <class Type>
-		inline void SetArg(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const Type& value)
-		{
-			SetArg_<std::decay_t<Type>>(moduleData, argIndex, value);
-		}
-
-		template <class Type>
-		inline void SetArg(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, Type& value)
-		{
-			SetArg_<std::decay_t<Type>&>(moduleData, argIndex, value);
-		}
-
-		template <>
-		void SetArg<bool>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const bool& value);
-
-		template <>
-		void SetArg<bool&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, bool& value);
-
-		template <>
-		void SetArg<int8>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const int8& value);
-
-		template <>
-		void SetArg<int8&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, int8& value);
-
-		template <>
-		void SetArg<uint8>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const uint8& value);
-
-		template <>
-		void SetArg<uint8&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, uint8& value);
-
-		template <>
-		void SetArg<int16>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const int16& value);
-
-		template <>
-		void SetArg<int16&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, int16& value);
-
-		template <>
-		void SetArg<uint16>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const uint16& value);
-
-		template <>
-		void SetArg<uint16&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, uint16& value);
-
-		template <>
-		void SetArg<int32>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const int32& value);
-
-		template <>
-		void SetArg<int32&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, int32& value);
-
-		template <>
-		void SetArg<uint32>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const uint32& value);
-
-		template <>
-		void SetArg<uint32&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, uint32& value);
-
-		template <>
-		void SetArg<int64>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const int64& value);
-
-		template <>
-		void SetArg<int64&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, int64& value);
-
-		template <>
-		void SetArg<uint64>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const uint64& value);
-
-		template <>
-		void SetArg<uint64&>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, uint64& value);
-
-		template <>
-		void SetArg<float>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const float& value);
-
-		template <>
-		void SetArg<double>(const std::shared_ptr<ScriptModuleData>& moduleData, uint32 argIndex, const double& value);
-
-		template <class Type>
-		inline Type GetReturnValue(const std::shared_ptr<ScriptModuleData>& moduleData)
-		{
-			return *static_cast<Type*>(moduleData->context->GetReturnObject());
-		}
-
-		template <>
-		void GetReturnValue<void>(const std::shared_ptr<ScriptModuleData>&);
-
-		template <>
-		bool GetReturnValue<bool>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		int8 GetReturnValue<int8>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		uint8 GetReturnValue<uint8>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		int16 GetReturnValue<int16>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		uint16 GetReturnValue<uint16>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		int32 GetReturnValue<int32>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		uint32 GetReturnValue<uint32>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		int64 GetReturnValue<int64>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		uint64 GetReturnValue<uint64>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		float GetReturnValue<float>(const std::shared_ptr<ScriptModuleData>& moduleData);
-
-		template <>
-		double GetReturnValue<double>(const std::shared_ptr<ScriptModuleData>& moduleData);
-	}
-
-
-	template <class Type>
-	struct ScriptFunction;
-
-	template <class Ret, class... Args>
-	struct ScriptFunction<Ret(Args...)>
-	{
-	private:
-
-		std::shared_ptr<ScriptModuleData> m_moduleData;
-
-		AngelScript::asIScriptFunction* m_function = nullptr;
-
-		template <class Type, class ... Args2>
-		void setArgs(uint32 argIndex, Type&& value, Args2&&... args) const
-		{
-			setArg(argIndex++, std::forward<Type>(value));
-
-			setArgs(argIndex, std::forward<Args2>(args)...);
-		}
-
-		template <class Type>
-		void setArgs(uint32 argIndex, Type&& value) const
-		{
-			setArg(argIndex++, std::forward<Type>(value));
-		}
-
-		void setArgs(uint32) const
-		{
-
-		}
-
-		template <class Type>
-		void setArg(uint32 argIndex, Type&& value) const
-		{
-			detail::SetArg<Type>(m_moduleData, argIndex, std::forward<Type>(value));
-		}
-
-		bool execute() const
-		{
-			int32 steps = 0;
-
-			if (m_moduleData->withLineCues)
-			{
-				m_moduleData->context->SetLineCallback(asFUNCTION(detail::LineCallback), &steps, AngelScript::asCALL_CDECL);
-			}
-
-			uint64 scriptID = m_moduleData->scriptID;
-			uint64 scriptStepCounter = 0;
-			m_moduleData->context->SetUserData(&scriptID, static_cast<uint32>(detail::ScriptUserDataIndex::ScriptID));
-			m_moduleData->context->SetUserData(&scriptStepCounter, static_cast<uint32>(detail::ScriptUserDataIndex::StepCounter));
-
-			const int32 r = m_moduleData->context->Execute();
-
-			if (r == AngelScript::asEXECUTION_EXCEPTION)
-			{
-				LOG_ERROR(U"[script exception] An exception '{}' occurred."_fmt(Unicode::Widen(m_moduleData->context->GetExceptionString())));
-				return false;
-			}
-			else if (r == AngelScript::asEXECUTION_SUSPENDED)
-			{
-				System::Exit();
-			}
-
-			return true;
-		}
-
-		Optional<String> tryExecute() const
-		{
-			int32 steps = 0;
-
-			if (m_moduleData->withLineCues)
-			{
-				m_moduleData->context->SetLineCallback(asFUNCTION(detail::LineCallback), &steps, AngelScript::asCALL_CDECL);
-			}
-
-			uint64 scriptID = m_moduleData->scriptID;
-			uint64 scriptStepCounter = 0;
-			m_moduleData->context->SetUserData(&scriptID, static_cast<uint32>(detail::ScriptUserDataIndex::ScriptID));
-			m_moduleData->context->SetUserData(&scriptStepCounter, static_cast<uint32>(detail::ScriptUserDataIndex::StepCounter));
-
-			const int32 r = m_moduleData->context->Execute();
-
-			if (r == AngelScript::asEXECUTION_EXCEPTION)
-			{
-				return Unicode::Widen(m_moduleData->context->GetExceptionString());
-			}
-			else if (r == AngelScript::asEXECUTION_SUSPENDED)
-			{
-				System::Exit();
-			}
-
-			return none;
-		}
-
-		template <class Type>
-		Type getReturn() const
-		{
-			return detail::GetReturnValue<Type>(m_moduleData);
-		}
-
 	public:
 
-		static constexpr size_t nargs = sizeof...(Args);
-
-		template <size_t i>
-		struct Arg
-		{
-			using type = typename std::tuple_element_t<i, std::tuple<Args...>>;
-		};
-
-		ScriptFunction() = default;
-
-		ScriptFunction(const std::shared_ptr<ScriptModuleData>& moduleData, AngelScript::asIScriptFunction* function)
-			: m_moduleData(moduleData)
-			, m_function((moduleData && moduleData->module && moduleData->context) ? function : nullptr) {}
-
-		explicit operator bool() const
-		{
-			return static_cast<bool>(m_function);
-		}
-
-		Ret operator()(Args... args) const
-		{
-			if (!m_function)
-			{
-				return Ret();
-			}
-
-			m_moduleData->context->Prepare(m_function);
-
-			setArgs(0, std::forward<Args>(args)...);
-
-			if (!execute())
-			{
-				return Ret();
-			}
-
-			return getReturn<Ret>();
-		}
-
-		Ret tryCall(Args... args, String& exception) const
-		{
-			if (!m_function)
-			{
-				return Ret();
-			}
-
-			m_moduleData->context->Prepare(m_function);
-
-			setArgs(0, std::forward<Args>(args)...);
-
-			if (const auto ex = tryExecute())
-			{
-				exception = ex.value();
-
-				return Ret();
-			}
-			else
-			{
-				exception.clear();
-			}
-
-			return getReturn<Ret>();
-		}
-	};
-
-	struct ScriptCompileOption
-	{
-		enum Option
-		{
-			BuildWithLineCues = 0b00001,
-		};
-	};
-
-	class Script
-	{
-	protected:
-
-		class Tag {};
-
-		using ScriptHandle = AssetHandle<Tag>;
-		
-		friend ScriptHandle::AssetHandle();
-		
-		friend ScriptHandle::AssetHandle(const IDWrapperType id) noexcept;
-
-		friend ScriptHandle::~AssetHandle();
-
-		std::shared_ptr<ScriptHandle> m_handle;
-
-		AngelScript::asIScriptFunction* _getFunction(const String& decl) const;
-
-		std::shared_ptr<ScriptModuleData> _getModuleData() const;
-
-	public:
-
-		using IDType = ScriptHandle::IDWrapperType;
-
-		/// <summary>
-		/// デフォルトコンストラクタ
-		/// </summary>
+		/// @brief デフォルトコンストラクタ
+		SIV3D_NODISCARD_CXX20
 		Script();
 
-		explicit Script(const FilePath& path, int32 compileOption = 0);
+		/// @brief スクリプトをファイルからロードしてコンパイルします。
+		/// @param path スクリプトファイルのパス
+		/// @param compileOption コンパイルオプション
+		SIV3D_NODISCARD_CXX20
+		explicit Script(FilePathView path, ScriptCompileOption compileOption = ScriptCompileOption::Default);
 
-		explicit Script(Arg::code_<String> code, int32 compileOption = 0);
+		/// @brief スクリプトをコードからコンパイルします。
+		/// @param code コード
+		/// @param compileOption コンパイルオプション
+		SIV3D_NODISCARD_CXX20
+		explicit Script(Arg::code_<StringView> code, ScriptCompileOption compileOption = ScriptCompileOption::Default);
 
-		/// <summary>
-		/// デストラクタ
-		/// </summary>
+		/// @brief デストラクタ
 		virtual ~Script();
 
-		/// <summary>
-		/// スクリプトをリリースします。
-		/// </summary>
-		/// <remarks>
-		/// プログラムのほかの場所で同じスクリプトが使われていない場合、スクリプトのメモリを解放します。
-		/// </remarks>
-		/// <returns>
-		/// なし
-		/// </returns>
-		void release();
+		/// @brief スクリプトに含まれる関数宣言の一覧を返します。
+		/// @param includeParamNames パラメータ名を含む場合 `IncludeParamNames::Yes`, それ以外の場合は `IncludeParamNames::No`
+		/// @return スクリプトに含まれる関数宣言の一覧
+		[[nodiscard]]
+		Array<String> getFunctionDeclarations(IncludeParamNames includeParamNames = IncludeParamNames::Yes) const;
 
-		/// <summary>
-		/// スクリプトが空かどうかを示します。
-		/// </summary>
-		[[nodiscard]] bool isEmpty() const;
-
-		/// <summary>
-		/// スクリプトが空ではないかを返します。
-		/// </summary>
-		/// <returns>
-		/// スクリプトが空ではない場合 true, それ以外の場合は false
-		/// </returns>
-		[[nodiscard]] explicit operator bool() const
-		{
-			return !isEmpty();
-		}
-
-		/// <summary>
-		/// スクリプトハンドルの ID を示します。
-		/// </summary>
-		[[nodiscard]] IDType id() const;
-
-		/// <summary>
-		/// 2 つの Script が同じかどうかを返します。
-		/// </summary>
-		/// <param name="script">
-		/// 比較する Script
-		/// </param>
-		/// <returns>
-		/// 2 つの Script が同じ場合 true, それ以外の場合は false
-		/// </returns>
-		[[nodiscard]] bool operator ==(const Script& script) const;
-
-		/// <summary>
-		/// 2 つの Script が異なるかどうかを返します。
-		/// </summary>
-		/// <param name="script">
-		/// 比較する Script
-		/// </param>
-		/// <returns>
-		/// 2 つの Script が異なる場合 true, それ以外の場合は false
-		/// </returns>
-		[[nodiscard]] bool operator !=(const Script& script) const;
-
+		/// @brief スクリプト関数を取得します。
+		/// @tparam Fty 関数の型
+		/// @param decl 関数の名前または関数宣言
+		/// @return スクリプト関数。取得に失敗した場合は空のスクリプト関数
 		template <class Fty>
-		[[nodiscard]] auto getFunction(const String& decl) const
-		{
-			const auto func = isEmpty() ? nullptr : _getFunction(decl);
+		[[nodiscard]]
+		ScriptFunction<Fty> getFunction(StringView decl) const;
 
-			return ScriptFunction<Fty>(func ? _getModuleData() : nullptr, func);
-		}
+		/// @brief ロードしたスクリプトのコンパイルに成功しているかを返します。
+		/// @return ロードしたスクリプトのコンパイルに成功している場合 true, それ以外の場合は false
+		[[nodiscard]]
+		bool compiled() const;
 
-		[[nodiscard]] bool compiled() const;
+		/// @brief スクリプトをリロードして再コンパイルします。
+		/// @param compileOption コンパイルオプション
+		/// @return リロードと再コンパイルに成功した場合 true, それ以外の場合は false
+		bool reload(ScriptCompileOption compileOption = ScriptCompileOption::Default);
 
-		void setSystemUpdateCallback(const std::function<bool(void)>& callback);
+		/// @brief スクリプト内での `System::Update()` で呼び出す関数を登録します。
+		/// @param callback 登録する関数
+		void setSystemUpdateCallback(const std::function<bool()>& callback);
 
-		void clearSystemUpdateCallback();
+		/// @brief インクルードされているファイル一覧を返します。
+		/// @return  インクルードされているファイル一覧
+		const Array<FilePath>& getIncludedFiles() const noexcept;
 
-		bool reload(int32 compileOption = 0);
-
+		/// @brief コンパイル時に出力されたメッセージ一覧を返します。
+		/// @return コンパイル時に出力されたメッセージ一覧
 		const Array<String>& getMessages() const;
 
-		[[nodiscard]] const FilePath& path() const;
+		/// @brief スクリプトのファイルパスを返します。
+		/// @return スクリプトのファイルパス。存在しない場合は空の文字列
+		[[nodiscard]]
+		const FilePath& path() const;
+
+		/// @brief 別のスクリプトと中身を交換します。
+		/// @param other 別のスクリプト
+		void swap(Script& other) noexcept;
+
+		/// @brief AngelScript の高度な機能にアクセスするためのエンジンポインタを返します（上級者向け）
+		/// @return AngelScript の高度な機能にアクセスするためのエンジンポインタ
+		[[nodiscard]]
+		static AngelScript::asIScriptEngine* GetEngine();
+
+	protected:
+
+		const std::shared_ptr<ScriptModule>& _getModule() const;
+
+		AngelScript::asIScriptFunction* _getFunction(StringView decl) const;
 	};
-
-	using ScriptID = Script::IDType;
-
-	namespace ScriptManager
-	{
-		[[nodiscard]] AngelScript::asIScriptEngine* GetEngine();
-	}
 }
+
+template <>
+inline void std::swap(s3d::Script& a, s3d::Script& b) noexcept;
+
+# include "detail/Script.ipp"

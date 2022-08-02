@@ -2,31 +2,48 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include <Siv3D/Fwd.hpp>
-# include <Siv3D/PointVector.hpp>
 # include <Siv3D/AnimatedGIFWriter.hpp>
 # include <Siv3D/BinaryWriter.hpp>
+# include <Siv3D/PointVector.hpp>
 # include "GIFWriter.hpp"
 
 namespace s3d
 {
 	class AnimatedGIFWriter::AnimatedGIFWriterDetail
 	{
+	public:
+
+		AnimatedGIFWriterDetail();
+
+		~AnimatedGIFWriterDetail();
+
+		bool open(FilePathView path, Size size, Dither dither, HasAlpha hasAlpha);
+
+		bool close();
+
+		bool isOpen() const;
+
+		bool writeFrame(const Image& image, int32 delay);
+
+		size_t frameCount() const;
+
+		Size imageSize() const;
+
 	private:
 
 		BinaryWriter m_writer;
 
 		GifWriter m_gif;
 
-		Size m_imageSize = Size(0, 0);
+		Size m_imageSize = Size{ 0, 0 };
 
 		size_t m_frameCount = 0;
 
@@ -35,23 +52,5 @@ namespace s3d
 		bool m_hasAlpha = true;
 
 		bool m_dither = true;
-
-	public:
-
-		AnimatedGIFWriterDetail();
-
-		~AnimatedGIFWriterDetail();
-
-		bool open(const FilePath& path, const Size& size, bool dither, bool hasAlpha);
-
-		bool close();
-
-		bool isOpened() const;
-
-		bool writeFrame(const Image& image, int32 delay);
-
-		size_t frameCount() const;
-
-		Size imageSize() const;
 	};
 }

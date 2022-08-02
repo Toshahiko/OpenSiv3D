@@ -2,450 +2,252 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include "Fwd.hpp"
-# include "PlatformDetail.hpp"
-# include "Array.hpp"
+# include "Common.hpp"
 # include "String.hpp"
 # include "Optional.hpp"
 # include "DateTime.hpp"
+# include "Array.hpp"
+# include "SpecialFolder.hpp"
+# include "CopyOption.hpp"
+# include "PredefinedYesNo.hpp"
 
 namespace s3d
 {
-	/// <summary>
-	/// ファイル作成時のオープンモード
-	/// </summary>
-	/// <remarks>
-	/// 書き込み用ファイル作成時に同名の既存ファイルがある場合の動作を示します。
-	/// </remarks>
-	enum class OpenMode
+	namespace Platform
 	{
-		/// <summary>
-		/// 同名のファイルが存在する場合、それを破棄する。
-		/// </summary>
-		Trunc,
+	# if SIV3D_PLATFORM(WINDOWS)
 
-		/// <summary>
-		/// 同名のファイルが存在する場合、それに追加書き込みする。
-		/// </summary>
-		Append,
-	};
+		using NativeFilePath = std::wstring;
 
-	/// <summary>
-	/// ファイルコピー時の動作
-	/// </summary>
-	/// <remarks>
-	/// ファイルをコピーする際の動作を示します。
-	/// </remarks>
-	enum class CopyOption
-	{
-		/// <summary>
-		/// ファイル名が既に使われていた場合、コピーを失敗させる。
-		/// Report an error.
-		/// </summary>
-		None,
+	# else
 
-		/// <summary>
-		/// ファイル名が既に使われていた場合、エラーを発生させずにスキップする。
-		/// Keep the existing file, without reporting an error.
-		/// </summary>
-		SkipExisting,
+		using NativeFilePath = std::string;
 
-		/// <summary>
-		/// ファイル名が既に使われていた場合、ファイルを上書きする。
-		/// Replace the existing file.
-		/// </summary>
-		OverwriteExisting,
+	# endif
+	}
 
-		/// <summary>
-		/// ファイルが既に存在する場合、コピーするファイルが新しければ上書きする。
-		/// Replace the existing file only if it is older than the file being copied.
-		/// </summary>
-		UpdateExisting,
-
-		Default = None,
-	};
-
-	enum class SpecialFolder
-	{
-		Desktop,
-
-		Documents,
-
-		LocalAppData,
-
-		Pictures,
-
-		Music,
-
-		Videos,
-
-		Caches = LocalAppData,
-
-		Movies = Videos,
-		
-		SystemFonts,
-		
-		LocalFonts,
-		
-		UserFonts,
-	};
-
-	/// <summary>
-	/// ファイルとディレクトリ
-	/// </summary>
-	/// <remarks>
-	/// ファイルとディレクトリを操作する機能を提供します。
-	/// </remarks>
 	namespace FileSystem
 	{
-		/// <summary>
-		/// 指定したパスのファイルまたはディレクトリが存在するかを返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// 存在する場合は true, それ以外の場合は false
-		/// </returns>
-		[[nodiscard]] bool Exists(FilePathView path);
+		/// @brief ファイルパスがリソースのパスであるかを返します。
+		/// @param path ファイルパス
+		/// @remark 実際に存在するリソースのパスである必要はありません
+		/// @return リソースのパスである場合 true, それ以外の場合は false
+		[[nodiscard]]
+		bool IsResourcePath(FilePathView path) noexcept;
 
-		/// <summary>
-		/// 指定したパスがディレクトリであるかを返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// ディレクトリである場合は true, それ以外の場合は false
-		/// </returns>
-		[[nodiscard]] bool IsDirectory(FilePathView path);
+		/// @brief 指定されたパスのファイルまたはディレクトリが存在するかを返します。
+		/// @param path パス
+		/// @return 指定されたパスのファイルまたはディレクトリが存在場合 true, それ以外の場合は false
+		[[nodiscard]]
+		bool Exists(FilePathView path);
 
-		/// <summary>
-		/// 指定したパスがファイルであるかを返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// ファイルである場合は true, それ以外の場合は false
-		/// </returns>
-		[[nodiscard]] bool IsFile(FilePathView path);
+		/// @brief 指定したパスのディレクトリが存在するかを返します。
+		/// @param path ディレクトリのパス
+		/// @return 指定したパスのディレクトリが存在する場合 true, それ以外の場合は false
+		[[nodiscard]]
+		bool IsDirectory(FilePathView path);
+		
+		/// @brief 指定したパスのファイルが存在するかを返します。
+		/// @param path ファイルパス
+		/// @return 指定したパスのファイルが存在する場合 true, それ以外の場合は false
+		[[nodiscard]]
+		bool IsFile(FilePathView path);
 
-		/// <summary>
-		/// 指定したパスが exe に埋め込まれたリソースであるかを返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// リソースである場合は true, それ以外の場合は false
-		/// </returns>
-		[[nodiscard]] bool IsResource(FilePathView path);
+		/// @brief 指定したパスのリソースが存在するかを返します。
+		/// @param path リソースパス
+		/// @return 指定したパスのリソースが存在する場合 true, それ以外の場合は false
+		[[nodiscard]]
+		bool IsResource(FilePathView path);
 
-		/// <summary>
-		/// 指定したファイルの絶対パスを返します。（例: "C:/Users/Siv/Desktop/picture.png"）
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// ファイルの絶対パス。失敗した場合は空の文字列
-		/// </returns>
-		[[nodiscard]] FilePath FullPath(FilePathView path);
+		/// @brief 絶対パスを返します。
+		/// @param path パス
+		/// @remark 実際に存在するファイルやディレクトリのパスである必要はありません
+		/// @remark 例: "C:/Users/Siv/Desktop/picture.png"
+		/// @return 絶対パス。失敗した場合は空の文字列
+		[[nodiscard]]
+		FilePath FullPath(FilePathView path);
 
-		[[nodiscard]] Platform::NativeFilePath NativePath(FilePathView path);
+		/// @brief OS ネイティブの形式で表記された絶対パスを返します。
+		/// @param path パス
+		/// @return OS ネイティブの形式で表記された絶対パス。失敗した場合は空の文字列
+		[[nodiscard]]
+		Platform::NativeFilePath NativePath(FilePathView path);
 
-		/// <summary>
-		/// 指定したファイルの .を含まない拡張子を小文字にして返します。（例: "png"）
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// 小文字の拡張子。失敗した場合は空の文字列
-		/// </returns>
-		[[nodiscard]] String Extension(FilePathView path);
+		/// @brief ファイルの拡張子(.を含まない) を小文字にして返します。
+		/// @param path ファイルパス
+		/// @remark 例: "png"
+		/// @return 小文字の拡張子。失敗した場合は空の文字列
+		[[nodiscard]]
+		String Extension(FilePathView path);
 
-		/// <summary>
-		/// 指定したファイルの、親ディレクトリを含まずに、拡張子を含んだ名前を返します。（例: "picture.png"）
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// ファイル名。失敗した場合は空の文字列
-		/// </returns>
-		[[nodiscard]] String FileName(FilePathView path);
+		/// @brief 親ディレクトリを含まずに、ファイル名を返します。
+		/// @param path ファイルパス
+		/// @remark 例: "picture.png"
+		/// @return ファイル名。失敗した場合は空の文字列
+		[[nodiscard]]
+		String FileName(FilePathView path);
 
-		/// <summary>
-		/// 指定したファイルの、親ディレクトリと拡張子を含まない名前を返します。（例: "picture"）
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// ファイル名。失敗した場合は空の文字列
-		/// </returns>
-		[[nodiscard]] String BaseName(FilePathView path);
+		/// @brief 親ディレクトリを含まずに、拡張子を除いたファイル名を返します。
+		/// @param path ファイルパス
+		/// @remark 例: "picture"
+		/// @return ファイル名。失敗した場合は空の文字列
+		[[nodiscard]]
+		String BaseName(FilePathView path);
 
-		/// <summary>
-		/// 指定したファイルの親ディレクトリを返します。（例: "C:/Users/Siv/Desktop/"）
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// 親ディレクトリ。失敗した場合は空の文字列
-		/// </returns>
-		[[nodiscard]] FilePath ParentPath(FilePathView path, size_t level = 0, FilePath* baseFullPath = nullptr);
+		/// @brief 指定したパスの親ディレクトリを返します。
+		/// @param path パス
+		/// @param level 親のレベル。大きいほど上位の親ディレクトリ
+		/// @return 親ディレクトリ。失敗した場合は空の文字列
+		[[nodiscard]]
+		FilePath ParentPath(FilePathView path, size_t level = 0);
 
-		/// <summary>
-		/// 指定したファイルのドライブのパスを返します。（例: "C:/"）
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// ドライブのパス。失敗した場合は空の文字列
-		/// </returns>
-		[[nodiscard]] FilePath VolumePath(FilePathView path);
+		/// @brief 指定したパスの親ディレクトリを返します。合わせて、渡したパスのフルパスを取得します。
+		/// @param path パス
+		/// @param level 親のレベル。大きいほど上位の親ディレクトリ
+		/// @param baseFullPath 渡したパスのフルパスを格納する変数への参照
+		/// @return 親ディレクトリ。失敗した場合は空の文字列
+		[[nodiscard]]
+		FilePath ParentPath(FilePathView path, size_t level, FilePath& baseFullPath);
 
-		/// <summary>
-		/// 指定したディレクトリが空であるかを返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// ディレクトリが空である場合は true, それ以外の場合は false
-		/// </returns>
-		[[nodiscard]] bool IsEmptyDirectory(FilePathView path);
+		[[nodiscard]]
+		FilePath VolumePath(FilePathView path);
 
-		/// <summary>
-		/// 指定したファイルかディレクトリのサイズを返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <remarks>
-		/// ファイルやディレクトリが存在しなかったり、空である場合は 0 を返します。
-		/// </remarks>
-		/// <returns>
-		/// サイズ
-		/// </returns>
-		[[nodiscard]] int64 Size(FilePathView path);
+		[[nodiscard]]
+		FilePath PathAppend(FilePathView lhs, FilePathView rhs);
 
-		/// <summary>
-		/// 指定したファイルのサイズを返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <remarks>
-		/// ファイルが存在しなかったり、空である場合は 0 を返します。
-		/// </remarks>
-		/// <returns>
-		/// サイズ
-		/// </returns>
-		[[nodiscard]] int64 FileSize(FilePathView path);
+		/// @brief 指定したパスが空のディレクトリであるかを返します。
+		/// @param path パス
+		/// @return 空のディレクトリである場合 true, それ以外の場合は false
+		[[nodiscard]]
+		bool IsEmptyDirectory(FilePathView path);
 
-		/// <summary>
-		/// ファイルまたはディレクトリの作成日時を返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// 作成日時。ファイルが存在しない場合 none
-		/// </returns>
-		[[nodiscard]] Optional<DateTime> CreationTime(FilePathView path);
+		/// @brief 指定したファイルやディレクトリのサイズを返します。
+		/// @param path パス
+		/// @return ファイルやディレクトリのサイズ
+		[[nodiscard]]
+		int64 Size(FilePathView path);
 
-		/// <summary>
-		/// ファイルまたはディレクトリの更新日時を返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// 更新日時。ファイルが存在しない場合 none
-		/// </returns>
-		[[nodiscard]] Optional<DateTime> WriteTime(FilePathView path);
+		/// @brief ファイルのサイズを返します。
+		/// @param path ファイルパス
+		/// @remark `FileSystem::Size()` と異なり、ディレクトリのサイズは取得できません。
+		/// @remark ファイルが存在しなかったり、空である場合は 0 を返します。
+		/// @return ファイルのサイズ
+		[[nodiscard]]
+		int64 FileSize(FilePathView path);
 
-		/// <summary>
-		/// ファイルまたはディレクトリのアクセス日時を返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// アクセス日時。ファイルが存在しない場合 none
-		/// </returns>
-		[[nodiscard]] Optional<DateTime> AccessTime(FilePathView path);
+		/// @brief ファイルの作成日時を取得します。
+		/// @param path ファイルパス
+		/// @return ファイルの作成日時。取得に失敗した場合 none
+		[[nodiscard]]
+		Optional<DateTime> CreationTime(FilePathView path);
 
-		/// <summary>
-		/// 指定したディレクトリにあるファイルとディレクトリの一覧を返します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// ファイルとディレクトリの一覧
-		/// </returns>
-		[[nodiscard]] Array<FilePath> DirectoryContents(const FilePath& path, bool recursive = true);
+		/// @brief ファイルの最終更新日時を取得します。
+		/// @param path ファイルパス
+		/// @return ファイルの最終更新日時。取得に失敗した場合 none
+		[[nodiscard]]
+		Optional<DateTime> WriteTime(FilePathView path);
 
-		/// <summary>
-		/// プログラムが起動したパスを返します。
-		/// </summary>
-		/// <returns>
-		/// プログラムが起動したパス
-		/// </returns>
-		[[nodiscard]] const FilePath& InitialDirectory();
+		/// @brief ファイルの最終アクセス日時を取得します。
+		/// @param path ファイルパス
+		/// @return ファイルの最終アクセス日時。取得に失敗した場合 none
+		[[nodiscard]]
+		Optional<DateTime> AccessTime(FilePathView path);
 
-		/// <summary>
-		/// 現在のアプリケーションの実行可能ファイル (.exe) の完全パスを返します。
-		/// </summary>
-		/// <returns>
-		/// 現在のアプリケーションの完全パス
-		/// </returns>
-		[[nodiscard]] const FilePath& ModulePath();
+		/// @brief 指定したディレクトリの中身（パス）を取得します。
+		/// @param path ディレクトリのパス
+		/// @param recursive ディレクトリの中身にあるディレクトリの中身も取得する場合は `Recursive::Yes`, それ以外の場合は `Recursive::No`
+		/// @return 指定したディレクトリの中身（パス）の一覧
+		[[nodiscard]]
+		Array<FilePath> DirectoryContents(FilePathView path, Recursive recursive = Recursive::Yes);
 
-		/// <summary>
-		/// カレントパスを返します。
-		/// </summary>
-		/// <returns>
-		/// カレントパス
-		/// </returns>
-		[[nodiscard]] FilePath CurrentDirectory();
+		/// @brief 実行ファイルを起動したディレクトリを返します。
+		/// @return 実行ファイルを起動したディレクトリ
+		[[nodiscard]]
+		const FilePath& InitialDirectory() noexcept;
 
+		/// @brief 実行ファイルのフルパスを返します。
+		/// @return 実行ファイルのフルパス
+		[[nodiscard]]
+		const FilePath& ModulePath() noexcept;
+
+		/// @brief 現在のカレントディレクトリを返します。
+		/// @return 現在のカレントディレクトリ
+		[[nodiscard]]
+		FilePath CurrentDirectory();
+
+		/// @brief カレントディレクトリを変更します。
+		/// @param path 新しいカレントディレクトリ
+		/// @return カレントディレクトリの変更に成功した場合 true, それ以外の場合は false
 		bool ChangeCurrentDirectory(FilePathView path);
 
-		/// <summary>
-		/// 特殊フォルダのパスを返します。
-		/// </summary>
-		/// <param name="folder">
-		/// 特殊フォルダのジャンル
-		/// </param>
-		/// <returns>
-		/// 特殊フォルダのパス
-		/// </returns>
-		[[nodiscard]] FilePath SpecialFolderPath(SpecialFolder folder);
+		/// @brief 特殊フォルダのパスを返します。
+		/// @param folder 特殊フォルダの種類
+		/// @return 特殊フォルダのパス。存在しない場合は空の文字列
+		[[nodiscard]]
+		const FilePath& GetFolderPath(SpecialFolder folder);
 
-		/// <summary>
-		/// 一時ファイル用のディレクトリのパスを返します。パスの末尾には '/' が付きます。
-		/// </summary>
-		/// <returns>
-		/// 一時ファイル用のディレクトリのパス
-		/// </returns>
-		[[nodiscard]] FilePath TemporaryDirectoryPath();
+		/// @brief 一時ファイルの保存に使えるフォルダのパスを返します。
+		/// @return 一時ファイルの保存に使えるフォルダのパス
+		[[nodiscard]]
+		FilePath TemporaryDirectoryPath();
 
-		/// <summary>
-		/// 一時ファイル用の固有なファイルパスを返します。拡張子は ".tmp" です。
-		/// </summary>
-		/// <returns>
-		/// 一時ファイル用のファイルパス
-		/// </returns>
-		[[nodiscard]] FilePath UniqueFilePath(FilePathView directory = TemporaryDirectoryPath());
+		/// @brief 一時ファイル用に使えるファイルパスを返します。
+		/// @param directory 一時ファイルの保存に使うフォルダのパス
+		/// @return 一時ファイル用に使えるファイルパス
+		[[nodiscard]]
+		FilePath UniqueFilePath(FilePathView directory = TemporaryDirectoryPath());
 
-		/// <summary>
-		/// 指定したパスを相対パスに変換します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <param name="start">
-		/// 相対パスの基準位置
-		/// </param>
-		/// <returns>
-		/// 相対パス
-		/// </returns>
-		[[nodiscard]] FilePath RelativePath(FilePathView path, FilePathView start = FileSystem::CurrentDirectory());
+		/// @brief 相対パスを作成して返します。
+		/// @param path パス
+		/// @param start 相対パスの基準となるパス
+		/// @return start からみた path の相対パス
+		[[nodiscard]]
+		FilePath RelativePath(FilePathView path, FilePathView start = CurrentDirectory());
 
-		/// <summary>
-		/// ディレクトリを作成します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// 成功した場合は true, それ以外の場合は false
-		/// </returns>
+		/// @brief ディレクトリを作成します。
+		/// @param path 作成するディレクトリのパス
+		/// @remark 間のディレクトリが存在しない場合は自動的に作成します。
+		/// @return 作成に成功したか、すでに同名のディレクトリが存在する場合 true, それ以外の場合は false
 		bool CreateDirectories(FilePathView path);
 
-		/// <summary>
-		/// 指定したパスまでの親ディレクトリを作成します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <returns>
-		/// 成功した場合は true, それ以外の場合は false
-		/// </returns>
+		/// @brief 指定したパスの親ディレクトリを作成します。
+		/// @param path パス
+		/// @remark 間のディレクトリが存在しない場合は自動的に作成します。
+		/// @return 作成に成功したか、すでに同名のディレクトリが存在する場合 true, それ以外の場合は false
 		bool CreateParentDirectories(FilePathView path);
 
-		/// <summary>
-		/// ファイルまたはディレクトリの中身をコピーします。
-		/// </summary>
-		/// <param name="from">
-		/// コピーするパス
-		/// </param>
-		/// <param name="to">
-		/// コピー先のパス
-		/// </param>
-		/// <param name="copyOption">
-		/// 名前衝突時のふるまい
-		/// </param>
-		/// <returns>
-		/// 成功した場合は true, それ以外の場合は false
-		/// </returns>
+		/// @brief 指定したファイルまたはディレクトリをコピーします。
+		/// @param from コピー元のパス
+		/// @param to コピー先のパス
+		/// @param copyOption オプション
+		/// @return コピーに成功した場合 true, それ以外の場合は false
 		bool Copy(FilePathView from, FilePathView to, CopyOption copyOption = CopyOption::Default);
 
-		/// <summary>
-		/// ファイルまたはディレクトリを削除します。
-		/// </summary>
-		/// <param name="path">
-		/// パス
-		/// </param>
-		/// <param name="allowUndo">
-		/// ごみ箱に送る場合は true, それ以外の場合は false
-		/// </param>
-		/// <returns>
-		/// 成功した場合は true, それ以外の場合は false
-		/// </returns>
-		bool Remove(FilePathView path, bool allowUndo = false);
+		/// @brief 指定したファイルまたはディレクトリを削除します。
+		/// @param path 削除するパス
+		/// @param allowUndo 削除したファイルやディレクトリをゴミ箱に送る場合 `AllowUndo::Yes`, それ以外の場合は `AllowUndo::No`
+		/// @return 削除に成功した場合 true, それ以外の場合は false
+		bool Remove(FilePathView path, AllowUndo allowUndo = AllowUndo::No);
 
-		/// <summary>
-		/// ディレクトリの中身を削除します。
-		/// </summary>
-		/// <param name="path">
-		/// ディレクトリのパス
-		/// </param>
-		/// <returns>
-		/// 成功した場合は true, それ以外の場合は false
-		/// </returns>
-		bool RemoveContents(FilePathView path, bool allowUndo = false);
+		/// @brief 指定したディレクトリの中身を削除します。
+		/// @param path 中身を削除するディレクトリのパス
+		/// @param allowUndo 削除したファイルやディレクトリをゴミ箱に送る場合 `AllowUndo::Yes`, それ以外の場合は `AllowUndo::No`
+		/// @remark この関数の実行後、指定したディレクトリは空の状態になります。
+		/// @return 削除に成功した場合 true, それ以外の場合は false
+		bool RemoveContents(FilePathView path, AllowUndo allowUndo = AllowUndo::No);
 
-		/// <summary>
-		/// ファイルまたはディレクトリの名前を変更します。
-		/// </summary>
-		/// <param name="from">
-		/// 変更前のパス
-		/// </param>
-		/// <param name="to">
-		/// 変更後のパス
-		/// </param>
-		/// <returns>
-		/// 成功した場合は true, それ以外の場合は false
-		/// </returns>
+		/// @brief 指定したファイルまたはディレクトリをリネームします。
+		/// @param from リネームするパス
+		/// @param to リネーム後のパス
+		/// @return リネームに成功した場合 true, それ以外の場合は false
 		bool Rename(FilePathView from, FilePathView to);
-		
-		[[nodiscard]] bool IsSandBoxed();
 	}
 }

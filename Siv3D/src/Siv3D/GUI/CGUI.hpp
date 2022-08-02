@@ -2,26 +2,22 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include <memory>
 # include <Siv3D/Font.hpp>
+# include <Siv3D/Texture.hpp>
 # include "IGUI.hpp"
 
 namespace s3d
 {
-	class CGUI : public ISiv3DGUI
+	class CGUI final : public ISiv3DGUI
 	{
-	private:
-
-		std::unique_ptr<Font> m_defaultGUIFont;
-
 	public:
 
 		CGUI();
@@ -30,6 +26,16 @@ namespace s3d
 
 		void init() override;
 
-		const Font& getDefaultGUIFont() override;
+		const Font& getDefaultFont() const noexcept override;
+
+		const Texture& getColorPickerTexture() override;
+
+	private:
+
+		std::unique_ptr<Font> m_defaultFont;
+
+		Array<Font> m_iconFonts;
+
+		std::unique_ptr<Texture> m_colorPickerTexture;
 	};
 }

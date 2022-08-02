@@ -2,50 +2,42 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
 //-----------------------------------------------
 
 # pragma once
-# include "Fwd.hpp"
+# include "Common.hpp"
 # include "Array.hpp"
 # include "Image.hpp"
-# include "Polygon.hpp"
-# include "MultiPolygon.hpp"
+# include "EdgePreservingFilterType.hpp"
 
 namespace s3d
 {
-	enum class EdgePreservingFilterType
-	{
-		Recursive,
-
-		NormalizedConvolution,
-	};
-
 	namespace ImageProcessing
 	{
-		[[nodiscard]] inline constexpr uint32 CalculateMipCount(uint32 width, uint32 height)
-		{
-			uint32 numLevels = 1u;
+		/// @brief 何枚のミップマップ画像が作成されるかを返します。
+		/// @param width 元の画像の幅（ピクセル）
+		/// @param height 元の画像の高さ（ピクセル）
+		/// @return 作成されるミップマップ画像の枚数
+		[[nodiscard]]
+		inline constexpr size_t CalculateMipCount(uint32 width, uint32 height) noexcept;
 
-			while (width > 1u && height > 1u)
-			{
-				width = std::max(width / 2, 1u);
+		/// @brief 画像からミップマップ画像を作成します。
+		/// @param src 画像
+		/// @return ミップマップ画像
+		[[nodiscard]] 
+		Array<Image> GenerateMips(const Image& src);
 
-				height = std::max(height / 2, 1u);
-
-				++numLevels;
-			}
-
-			return numLevels;
-		}
-
-		[[nodiscard]] Array<Image> GenerateMips(const Image& src);
-
-		[[nodiscard]] Image GenerateSDF(const Image& image, const uint32 scale, const double spread = 16.0);
+		/// @brief 画像からミップマップ画像を作成します。
+		/// @param src 画像
+		/// @param maxLevel ミップマップの最大個数（この値が 2 の場合、一辺の大きさが 1/2 と 1/4 のミップマップが生成される）
+		/// @return ミップマップ画像
+		[[nodiscard]]
+		Array<Image> GenerateMips(const Image& src, size_t maxLevel);
 
 		void Sobel(const Image& src, Image& dst, int32 dx = 1, int32 dy = 1, int32 apertureSize = 3);
 
@@ -54,18 +46,21 @@ namespace s3d
 		void Canny(const Image& src, Image& dst, uint8 lowThreshold, uint8 highThreshold, int32 apertureSize = 3, bool useL2Gradient = false);
 
 		// _Field_range_(0.0, 200.0) sigma_s, _Field_range_(0.0, 1.0) double sigma_r
-		void EdgePreservingFilter(const Image& src, Image& dst, EdgePreservingFilterType filterType = EdgePreservingFilterType::Recursive, double sigma_s = 60, double sigma_r = 0.4);
+		void EdgePreservingFilter(const Image& src, Image& dst, EdgePreservingFilterType filter = EdgePreservingFilterType::Recursive, double sigma_s = 60, double sigma_r = 0.4);
 
 		// _Field_range_(0.0, 200.0) sigma_s, _Field_range_(0.0, 1.0) double sigma_r
 		void DetailEnhance(const Image& src, Image& dst, double sigma_s = 10, double sigma_r = 0.15);
 
 		// _Field_range_(0.0, 200.0) sigma_s, _Field_range_(0.0, 1.0) double sigma_r
-		void Stylization(const Image& src, Image& dst, double sigma_s = 60, double sigma_r = 0.07);
+		void Stylization(const Image& src, Image& dst, double sigma_s = 60, double sigma_r = 0.45);
 
-		[[nodiscard]] ColorF SSIM(const Image& image1, const Image& image2);
+		[[nodiscard]]
+		ColorF SSIM(const Image& image1, const Image& image2);
 
-		void Inpaint(const Image& image, const Image& maskImage, Image& result, int32 radius = 2);
+		void Inpaint(const Image& image, const Image& maskImage, const Color& maskColor, Image& result, int32 radius = 2);
 
 		void Inpaint(const Image& image, const Grid<uint8>& maskImage, Image& result, int32 radius = 2);
 	}
 }
+
+# include "detail/ImageProcessing.ipp"

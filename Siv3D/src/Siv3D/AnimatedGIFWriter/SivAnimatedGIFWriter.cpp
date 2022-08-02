@@ -2,8 +2,8 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
@@ -15,34 +15,28 @@
 namespace s3d
 {
 	AnimatedGIFWriter::AnimatedGIFWriter()
-		: pImpl(std::make_shared<AnimatedGIFWriterDetail>())
-	{
+		: pImpl{ std::make_shared<AnimatedGIFWriterDetail>() } {}
 
-	}
+	AnimatedGIFWriter::AnimatedGIFWriter(const FilePathView path, const int32 width, const int32 height, const Dither dither, const HasAlpha hasAlpha)
+		: AnimatedGIFWriter{ path, Size{ width, height }, dither, hasAlpha } {}
 
-	AnimatedGIFWriter::AnimatedGIFWriter(const FilePath& path, const int32 width, const int32 height, const bool dither, const bool hasAlpha)
-		: AnimatedGIFWriter(path, Size(width, height), dither, hasAlpha)
-	{
-	
-	}
-
-	AnimatedGIFWriter::AnimatedGIFWriter(const FilePath& path, const Size& size, const bool dither, const bool hasAlpha)
-		: AnimatedGIFWriter()
+	AnimatedGIFWriter::AnimatedGIFWriter(const FilePathView path, const Size size, const Dither dither, const HasAlpha hasAlpha)
+		: AnimatedGIFWriter{}
 	{
 		open(path, size, dither, hasAlpha);
 	}
 
 	AnimatedGIFWriter::~AnimatedGIFWriter()
 	{
-
+		// do nothing
 	}
 
-	bool AnimatedGIFWriter::open(const FilePath& path, const int32 width, const int32 height, const bool dither, const bool hasAlpha)
+	bool AnimatedGIFWriter::open(const FilePathView path, const int32 width, const int32 height, const Dither dither, const HasAlpha hasAlpha)
 	{
-		return open(path, Size(width, height), dither, hasAlpha);
+		return open(path, Size{ width, height }, dither, hasAlpha);
 	}
 
-	bool AnimatedGIFWriter::open(const FilePath& path, const Size& size, const bool dither, const bool hasAlpha)
+	bool AnimatedGIFWriter::open(const FilePathView path, const Size& size, const Dither dither, const HasAlpha hasAlpha)
 	{
 		return pImpl->open(path, size, dither, hasAlpha);
 	}
@@ -52,19 +46,19 @@ namespace s3d
 		return pImpl->close();
 	}
 
-	bool AnimatedGIFWriter::isOpened() const noexcept
+	bool AnimatedGIFWriter::isOpen() const noexcept
 	{
-		return pImpl->isOpened();
+		return pImpl->isOpen();
 	}
 
 	AnimatedGIFWriter::operator bool() const noexcept
 	{
-		return isOpened();
+		return isOpen();
 	}
 
 	bool AnimatedGIFWriter::writeFrame(const Image& image, const Duration& delay)
 	{
-		return pImpl->writeFrame(image, std::max(static_cast<int32>(delay.count() * 100.0), 1));
+		return pImpl->writeFrame(image, Max(static_cast<int32>(delay.count() * 100.0), 1));
 	}
 
 	size_t AnimatedGIFWriter::frameCount() const noexcept

@@ -8,175 +8,117 @@
 #include "fmt/format-inl.h"
 
 FMT_BEGIN_NAMESPACE
+namespace detail {
 
-namespace internal
-{
+// DEPRECATED!
+template <typename T = void> struct basic_data {
+  FMT_API static constexpr const char digits[100][2] = {
+      {'0', '0'}, {'0', '1'}, {'0', '2'}, {'0', '3'}, {'0', '4'}, {'0', '5'},
+      {'0', '6'}, {'0', '7'}, {'0', '8'}, {'0', '9'}, {'1', '0'}, {'1', '1'},
+      {'1', '2'}, {'1', '3'}, {'1', '4'}, {'1', '5'}, {'1', '6'}, {'1', '7'},
+      {'1', '8'}, {'1', '9'}, {'2', '0'}, {'2', '1'}, {'2', '2'}, {'2', '3'},
+      {'2', '4'}, {'2', '5'}, {'2', '6'}, {'2', '7'}, {'2', '8'}, {'2', '9'},
+      {'3', '0'}, {'3', '1'}, {'3', '2'}, {'3', '3'}, {'3', '4'}, {'3', '5'},
+      {'3', '6'}, {'3', '7'}, {'3', '8'}, {'3', '9'}, {'4', '0'}, {'4', '1'},
+      {'4', '2'}, {'4', '3'}, {'4', '4'}, {'4', '5'}, {'4', '6'}, {'4', '7'},
+      {'4', '8'}, {'4', '9'}, {'5', '0'}, {'5', '1'}, {'5', '2'}, {'5', '3'},
+      {'5', '4'}, {'5', '5'}, {'5', '6'}, {'5', '7'}, {'5', '8'}, {'5', '9'},
+      {'6', '0'}, {'6', '1'}, {'6', '2'}, {'6', '3'}, {'6', '4'}, {'6', '5'},
+      {'6', '6'}, {'6', '7'}, {'6', '8'}, {'6', '9'}, {'7', '0'}, {'7', '1'},
+      {'7', '2'}, {'7', '3'}, {'7', '4'}, {'7', '5'}, {'7', '6'}, {'7', '7'},
+      {'7', '8'}, {'7', '9'}, {'8', '0'}, {'8', '1'}, {'8', '2'}, {'8', '3'},
+      {'8', '4'}, {'8', '5'}, {'8', '6'}, {'8', '7'}, {'8', '8'}, {'8', '9'},
+      {'9', '0'}, {'9', '1'}, {'9', '2'}, {'9', '3'}, {'9', '4'}, {'9', '5'},
+      {'9', '6'}, {'9', '7'}, {'9', '8'}, {'9', '9'}};
+  FMT_API static constexpr const char hex_digits[] = "0123456789abcdef";
+  FMT_API static constexpr const char signs[4] = {0, '-', '+', ' '};
+  FMT_API static constexpr const char left_padding_shifts[5] = {31, 31, 0, 1,
+                                                                0};
+  FMT_API static constexpr const char right_padding_shifts[5] = {0, 31, 0, 1,
+                                                                 0};
+  FMT_API static constexpr const unsigned prefixes[4] = {0, 0, 0x1000000u | '+',
+                                                         0x1000000u | ' '};
+};
 
-#ifdef FMT_BUILTIN_CLZLL
-// Returns the number of decimal digits in n. Leading zeros are not counted
-// except for n == 0 in which case count_digits returns 1.
-unsigned count_digits(uint64_t n) {
-	// Based on http://graphics.stanford.edu/~seander/bithacks.html#IntegerLog10
-	// and the benchmark https://github.com/localvoid/cxx-benchmark-count-digits.
-	int t = (64 - FMT_BUILTIN_CLZLL(n | 1)) * 1233 >> 12;
-	return to_unsigned(t) - (n < data::POWERS_OF_10_64[t]) + 1;
-}
-#else
-	// Fallback version of count_digits used when __builtin_clz is not available.
-	unsigned count_digits(uint64_t n) {
-	unsigned count = 1;
-	for (;;) {
-		// Integer division is slow so do it for a group of four digits instead
-		// of for every digit. The idea comes from the talk by Alexandrescu
-		// "Three Optimization Tips for C++". See speed-test for a comparison.
-		if (n < 10) return count;
-		if (n < 100) return count + 1;
-		if (n < 1000) return count + 2;
-		if (n < 10000) return count + 3;
-		n /= 10000u;
-		count += 4;
-	}
-}
+#ifdef FMT_SHARED
+// Required for -flto, -fivisibility=hidden and -shared to work
+extern template struct basic_data<void>;
 #endif
 
-#ifdef FMT_BUILTIN_CLZ
-	// Optional version of count_digits for better performance on 32-bit platforms.
-	unsigned count_digits(uint32_t n) {
-		int t = (32 - FMT_BUILTIN_CLZ(n | 1)) * 1233 >> 12;
-		return to_unsigned(t) - (n < data::POWERS_OF_10_32[t]) + 1;
-	}
+#if __cplusplus < 201703L
+// DEPRECATED! These are here only for ABI compatiblity.
+template <typename T> constexpr const char basic_data<T>::digits[][2];
+template <typename T> constexpr const char basic_data<T>::hex_digits[];
+template <typename T> constexpr const char basic_data<T>::signs[];
+template <typename T> constexpr const char basic_data<T>::left_padding_shifts[];
+template <typename T>
+constexpr const char basic_data<T>::right_padding_shifts[];
+template <typename T> constexpr const unsigned basic_data<T>::prefixes[];
 #endif
 
+template <typename T>
+int format_float(char* buf, std::size_t size, const char* format, int precision,
+                 T value) {
+#ifdef FMT_FUZZ
+  if (precision > 100000)
+    throw std::runtime_error(
+        "fuzz mode - avoid large allocation inside snprintf");
+#endif
+  // Suppress the warning about nonliteral format string.
+  int (*snprintf_ptr)(char*, size_t, const char*, ...) = FMT_SNPRINTF;
+  return precision < 0 ? snprintf_ptr(buf, size, format, value)
+                       : snprintf_ptr(buf, size, format, precision, value);
 }
 
-template <typename ArgFormatter, typename Char, typename Context>
-void format_handler<ArgFormatter, Char, Context>::on_replacement_field(iterator it) {
-	context.parse_context().advance_to(pointer_from(it));
-	if (visit(internal::custom_formatter<Char, Context>(context), arg))
-		return;
-	basic_format_specs<Char> specs;
-	context.advance_to(visit(ArgFormatter(context, specs), arg));
-}
+template FMT_API dragonbox::decimal_fp<float> dragonbox::to_decimal(float x)
+    FMT_NOEXCEPT;
+template FMT_API dragonbox::decimal_fp<double> dragonbox::to_decimal(double x)
+    FMT_NOEXCEPT;
+}  // namespace detail
 
-template <typename ArgFormatter, typename Char, typename Context>
-typename format_handler<ArgFormatter, Char, Context>::iterator
-	format_handler<ArgFormatter, Char, Context>::on_format_specs(iterator it) {
-	auto& parse_ctx = context.parse_context();
-	parse_ctx.advance_to(pointer_from(it));
-	if (visit(internal::custom_formatter<Char, Context>(context), arg))
-		return iterator(parse_ctx);
-	basic_format_specs<Char> specs;
-	using internal::specs_handler;
-	internal::specs_checker<specs_handler<Context>>
-		handler(specs_handler<Context>(specs, context), arg.type());
-	it = parse_format_specs(it, handler);
-	if (*it != '}')
-		on_error("missing '}' in format string");
-	parse_ctx.advance_to(pointer_from(it));
-	context.advance_to(visit(ArgFormatter(context, specs), arg));
-	return it;
-}
+// Workaround a bug in MSVC2013 that prevents instantiation of format_float.
+int (*instantiate_format_float)(double, int, detail::float_specs,
+                                detail::buffer<char>&) = detail::format_float;
 
-template struct format_handler<arg_formatter<back_insert_range<internal::basic_buffer<char>>>, char, basic_format_context<std::back_insert_iterator<internal::basic_buffer<char>>, char>>;
-template struct format_handler<arg_formatter<back_insert_range<internal::basic_buffer<char32_t>>>, char32_t, basic_format_context<std::back_insert_iterator<internal::basic_buffer<char32_t>>, char32_t>>;
-
-
-
-
-template <typename T, std::size_t SIZE, typename Allocator>
-void basic_memory_buffer<T, SIZE, Allocator>::grow(std::size_t size) {
-	std::size_t old_capacity = this->capacity();
-	std::size_t new_capacity = old_capacity + old_capacity / 2;
-	if (size > new_capacity)
-		new_capacity = size;
-	T * old_data = this->data();
-	T * new_data = internal::allocate<Allocator>(*this, new_capacity);
-	// The following code doesn't throw, so the raw pointer above doesn't leak.
-	std::uninitialized_copy(old_data, old_data + this->size(),
-		internal::make_checked(new_data, new_capacity));
-	this->set(new_data, new_capacity);
-	// deallocate must not throw according to the standard, but even if it does,
-	// the buffer already uses the new storage and will deallocate it in
-	// destructor.
-	if (old_data != store_)
-		Allocator::deallocate(old_data, old_capacity);
-}
-
-template class basic_memory_buffer<char, 500, std::allocator<char>>;
-
-
-
-
-
-
-
-format_context::iterator vformat_to(
-	internal::buffer& buf, string_view format_str, format_args args) {
-	typedef back_insert_range<internal::buffer> range;
-	return vformat_to<arg_formatter<range>>(buf, format_str, args);
-}
-
-wformat_context::iterator vformat_to(
-	internal::wbuffer& buf, wstring_view format_str, wformat_args args) {
-	typedef back_insert_range<internal::wbuffer> range;
-	return vformat_to<arg_formatter<range>>(buf, format_str, args);
-}
-
-
-std::string vformat(string_view format_str, format_args args) {
-	memory_buffer buffer;
-	vformat_to(buffer, format_str, args);
-	return fmt_s3d::to_string(buffer);
-}
-
-std::u32string vformat(wstring_view format_str, wformat_args args) {
-	wmemory_buffer buffer;
-	vformat_to(buffer, format_str, args);
-	return to_string(buffer);
-}
-
-
-
-
-namespace internal {
-// Force linking of inline functions into the library.
-std::string (*vformat_ref)(string_view, format_args) = vformat;
-std::u32string (*vformat_wref)(wstring_view, wformat_args) = vformat;
-}
-
-template struct internal::basic_data<void>;
+#ifndef FMT_STATIC_THOUSANDS_SEPARATOR
+template FMT_API detail::locale_ref::locale_ref(const std::locale& loc);
+template FMT_API std::locale detail::locale_ref::get<std::locale>() const;
+#endif
 
 // Explicit instantiations for char.
 
-template FMT_API char internal::thousands_sep(locale_provider *lp);
+template FMT_API auto detail::thousands_sep_impl(locale_ref)
+    -> thousands_sep_result<char>;
+template FMT_API char detail::decimal_point_impl(locale_ref);
 
-template void basic_fixed_buffer<char>::grow(std::size_t);
+template FMT_API void detail::buffer<char>::append(const char*, const char*);
 
-template void internal::arg_map<format_context>::init(
-    const basic_format_args<format_context> &args);
+// DEPRECATED!
+// There is no correspondent extern template in format.h because of
+// incompatibility between clang and gcc (#2377).
+template FMT_API void detail::vformat_to(
+    detail::buffer<char>&, string_view,
+    basic_format_args<FMT_BUFFER_CONTEXT(char)>, detail::locale_ref);
 
-template FMT_API int internal::char_traits<char>::format_float(
-    char *buffer, std::size_t size, const char *format, int precision,
-    double value);
-
-template FMT_API int internal::char_traits<char>::format_float(
-    char *buffer, std::size_t size, const char *format, int precision,
-    long double value);
+template FMT_API int detail::snprintf_float(double, int, detail::float_specs,
+                                            detail::buffer<char>&);
+template FMT_API int detail::snprintf_float(long double, int,
+                                            detail::float_specs,
+                                            detail::buffer<char>&);
+template FMT_API int detail::format_float(double, int, detail::float_specs,
+                                          detail::buffer<char>&);
+template FMT_API int detail::format_float(long double, int, detail::float_specs,
+                                          detail::buffer<char>&);
 
 // Explicit instantiations for wchar_t.
 
-template FMT_API char32_t internal::thousands_sep(locale_provider *lp);
+template FMT_API auto detail::thousands_sep_impl(locale_ref)
+    -> thousands_sep_result<wchar_t>;
+template FMT_API wchar_t detail::decimal_point_impl(locale_ref);
 
-template void basic_fixed_buffer<char32_t>::grow(std::size_t);
+template FMT_API void detail::buffer<wchar_t>::append(const wchar_t*,
+                                                      const wchar_t*);
 
-template void internal::arg_map<wformat_context>::init(
-    const basic_format_args<wformat_context> &args);
+template struct detail::basic_data<void>;
 
-template FMT_API int internal::char_traits<char32_t>::format_float(
-	char32_t *buffer, std::size_t size, const wchar_t *format,
-    int precision, double value);
-
-template FMT_API int internal::char_traits<char32_t>::format_float(
-	char32_t *buffer, std::size_t size, const wchar_t *format,
-    int precision, long double value);
 FMT_END_NAMESPACE

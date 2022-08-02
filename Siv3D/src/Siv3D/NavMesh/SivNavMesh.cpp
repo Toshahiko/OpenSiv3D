@@ -2,8 +2,8 @@
 //
 //	This file is part of the Siv3D Engine.
 //
-//	Copyright (c) 2008-2019 Ryo Suzuki
-//	Copyright (c) 2016-2019 OpenSiv3D Project
+//	Copyright (c) 2008-2022 Ryo Suzuki
+//	Copyright (c) 2016-2022 OpenSiv3D Project
 //
 //	Licensed under the MIT License.
 //
@@ -15,8 +15,45 @@
 namespace s3d
 {
 	NavMesh::NavMesh()
+		: pImpl{ std::make_shared<NavMeshDetail>() }
 	{
 
+	}
+
+	NavMesh::NavMesh(const Polygon& polygon, const NavMeshConfig& config)
+		: NavMesh{}
+	{
+		build(polygon, config);
+	}
+
+	NavMesh::NavMesh(const Polygon& polygon, const Array<uint8>& areaIDs, const NavMeshConfig& config)
+		: NavMesh{}
+	{
+		build(polygon, areaIDs, config);
+	}
+
+	NavMesh::NavMesh(const Array<Float2>& vertices, const Array<TriangleIndex>& indices, const NavMeshConfig& config)
+		: NavMesh{}
+	{
+		build(vertices, indices, config);
+	}
+
+	NavMesh::NavMesh(const Array<Float2>& vertices, const Array<TriangleIndex>& indices, const Array<uint8>& areaIDs, const NavMeshConfig& config)
+		: NavMesh{}
+	{
+		build(vertices, indices, areaIDs, config);
+	}
+
+	NavMesh::NavMesh(const Array<Float3>& vertices, const Array<TriangleIndex>& indices, const NavMeshConfig& config)
+		: NavMesh{}
+	{
+		build(vertices, indices, config);
+	}
+
+	NavMesh::NavMesh(const Array<Float3>& vertices, const Array<TriangleIndex>& indices, const Array<uint8>& areaIDs, const NavMeshConfig& config)
+		: NavMesh{}
+	{
+		build(vertices, indices, areaIDs, config);
 	}
 
 	NavMesh::~NavMesh()
@@ -24,25 +61,53 @@ namespace s3d
 
 	}
 
-	bool NavMesh::build(const Array<Float3>& vertices, const Array<uint16>& indices, const NavMeshConfig& config)
+	bool NavMesh::isValid() const noexcept
 	{
-		return build(vertices, indices, Array<uint8>(indices.size() / 3, 1), config);
+		return pImpl->isValid();
 	}
 
-	bool NavMesh::build(const Array<Float3>& vertices, const Array<uint16>& indices, const Array<uint8>& areaIDs, const NavMeshConfig& config)
+	NavMesh::operator bool() const noexcept
 	{
-		pImpl = std::make_shared<NavMeshDetail>();
+		return isValid();
+	}
 
+	bool NavMesh::build(const Polygon& polygon, const NavMeshConfig& config)
+	{
+		return pImpl->build(polygon.vertices(), polygon.indices(), Array<uint8>(polygon.indices().size(), 1), config);
+	}
+
+	bool NavMesh::build(const Polygon& polygon, const Array<uint8>& areaIDs, const NavMeshConfig& config)
+	{
+		return pImpl->build(polygon.vertices(), polygon.indices(), areaIDs, config);
+	}
+
+	bool NavMesh::build(const Array<Float2>& vertices, const Array<TriangleIndex>& indices, const NavMeshConfig& config)
+	{
+		return pImpl->build(vertices, indices, Array<uint8>(indices.size(), 1), config);
+	}
+
+	bool NavMesh::build(const Array<Float2>& vertices, const Array<TriangleIndex>& indices, const Array<uint8>& areaIDs, const NavMeshConfig& config)
+	{
 		return pImpl->build(vertices, indices, areaIDs, config);
 	}
 
-	Array<Vec3> NavMesh::query(const Vec3& start, const Vec3& end) const
+	bool NavMesh::build(const Array<Float3>& vertices, const Array<TriangleIndex>& indices, const NavMeshConfig& config)
 	{
-		if (!pImpl)
-		{
-			return{};
-		}
+		return pImpl->build(vertices, indices, Array<uint8>(indices.size(), 1), config);
+	}
 
-		return pImpl->query(start, end);
+	bool NavMesh::build(const Array<Float3>& vertices, const Array<TriangleIndex>& indices, const Array<uint8>& areaIDs, const NavMeshConfig& config)
+	{
+		return pImpl->build(vertices, indices, areaIDs, config);
+	}
+
+	Array<Vec2> NavMesh::query(const Vec2& start, const Vec2& end, const Array<std::pair<int32, double>>& areaCosts) const
+	{
+		return pImpl->query(start, end, areaCosts);
+	}
+
+	Array<Vec3> NavMesh::query(const Vec3& start, const Vec3& end, const Array<std::pair<int32, double>>& areaCosts) const
+	{
+		return pImpl->query(start, end, areaCosts);
 	}
 }

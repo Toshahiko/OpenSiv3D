@@ -38,7 +38,7 @@
 #include "cereal/details/traits.hpp"
 #include "cereal/details/polymorphic_impl.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && _MSC_VER < 1916
 #define CEREAL_STATIC_CONSTEXPR static
 #else
 #define CEREAL_STATIC_CONSTEXPR static constexpr
@@ -165,17 +165,19 @@
     See CEREAL_REGISTER_DYNAMIC_INIT for detailed explanation
     of how this macro should be used.  The name used should
     match that for CEREAL_REGISTER_DYNAMIC_INIT. */
-#define CEREAL_FORCE_DYNAMIC_INIT(LibName)              \
-  namespace cereal {                                    \
-  namespace detail {                                    \
-    void dynamic_init_dummy_##LibName();                \
-  } /* end detail */                                    \
-  namespace {                                           \
-    void dynamic_init_##LibName()                       \
-    {                                                   \
-      ::cereal::detail::dynamic_init_dummy_##LibName(); \
-    }                                                   \
-  } } /* end namespaces */
+#define CEREAL_FORCE_DYNAMIC_INIT(LibName)                 \
+  namespace cereal {                                       \
+  namespace detail {                                       \
+    void CEREAL_DLL_EXPORT dynamic_init_dummy_##LibName(); \
+  } /* end detail */                                       \
+  } /* end cereal */                                       \
+  namespace {                                              \
+    struct dynamic_init_##LibName {                        \
+      dynamic_init_##LibName() {                           \
+        ::cereal::detail::dynamic_init_dummy_##LibName();  \
+      }                                                    \
+    } dynamic_init_instance_##LibName;                     \
+  } /* end anonymous namespace */
 
 namespace cereal
 {
